@@ -218,7 +218,7 @@ export function CatalogPage() {
                       <Button
                         size="sm"
                         className="bg-[#1e40af] hover:bg-[#1e3a8a]"
-                        onClick={(e: { stopPropagation: () => void; }) => {
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           navigate(`/product/${product.id}`);
                         }}

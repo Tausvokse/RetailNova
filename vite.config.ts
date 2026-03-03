@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  base: '/RetailNove/',
+  base: '/',
   resolve: {
     alias: {
       // Alias @ to the src directory

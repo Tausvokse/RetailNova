@@ -10,7 +10,6 @@ import { Header } from "../components/Header";
 export function ProductDetailPage() {
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
-  const [quantity, setQuantity] = useState(1);
 
   // Mock product data
   const product = {
@@ -31,6 +30,8 @@ export function ProductDetailPage() {
       "Вбудований мікрофон",
     ],
   };
+
+  const [quantity, setQuantity] = useState(product.stock > 0 ? 1 : 0);
 
   const handleAddToCart = () => {
     // Navigate to checkout with product data
