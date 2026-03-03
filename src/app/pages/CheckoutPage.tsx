@@ -1,302 +1,124 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { Clock, CreditCard, Truck, MapPin, X } from "lucide-react";
+import { Clock, CreditCard } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card } from "../components/ui/card";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { Header } from "../components/Header";
+import { api, getToken } from "../lib/api";
+
+type CheckoutItem = { id: string; name: string; price: number; quantity: number; images?: string[]; image?: string };
+type ProfileData = { user: { firstName?: string; lastName?: string; email?: string; phone?: string }; addresses: any[]; paymentMethods: any[] };
 
 export function CheckoutPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
-  const [showExpiredModal, setShowExpiredModal] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState("standard");
-
-  const items = location.state?.items || [];
+  const items: CheckoutItem[] = location.state?.items || [];
+  const [timeLeft, setTimeLeft] = useState(15 * 60);
+  const [error, setError] = useState("");
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState("");
+  const [selectedPayment, setSelectedPayment] = useState("");
+  const [details, setDetails] = useState({ firstName: "", lastName: "", email: "", phone: "", address: "", city: "", state: "", postalCode: "" });
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setShowExpiredModal(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    const timer = setInterval(() => setTimeLeft((prev) => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  useEffect(() => {
+    if (!getToken() && items.length > 0) {
+      navigate("/auth", { state: { returnTo: "/checkout", items }, replace: true });
+    }
+  }, [items, navigate]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    api<ProfileData>("/profile", {}, true)
+      .then((data) => {
+        setProfile(data);
+        setDetails((d) => ({ ...d, firstName: data.user.firstName || "", lastName: data.user.lastName || "", email: data.user.email || "", phone: data.user.phone || "" }));
+        if (data.addresses.length > 0) {
+          const preferred = data.addresses.find((a) => a.isDefault) || data.addresses[0];
+          setSelectedAddress(preferred.id);
+          setDetails((d) => ({ ...d, address: preferred.line1 || "", city: preferred.city || "", state: preferred.state || "", postalCode: preferred.postalCode || "" }));
+        }
+        if (data.paymentMethods.length > 0) {
+          const preferredCard = data.paymentMethods.find((m) => m.isDefault) || data.paymentMethods[0];
+          setSelectedPayment(preferredCard.id);
+        }
+      })
+      .catch(() => setProfile(null));
+  }, []);
+
+  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const total = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
+
+  const onSelectAddress = (id: string) => {
+    setSelectedAddress(id);
+    const address = profile?.addresses.find((a) => a.id === id);
+    if (!address) return;
+    setDetails((d) => ({ ...d, address: address.line1 || "", city: address.city || "", state: address.state || "", postalCode: address.postalCode || "" }));
   };
 
-  const calculateTotal = () => {
-    return items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
-  };
+  const handlePlaceOrder = async () => {
+    if (!getToken()) {
+      navigate("/auth", { state: { returnTo: "/checkout", items } });
+      return;
+    }
 
-  const handlePlaceOrder = () => {
-    const orderId = "RN-" + Math.floor(Math.random() * 10000);
-    navigate(`/order-success/${orderId}`, {
-      state: {
-        orderId,
-        items,
-        total: calculateTotal(),
-      },
-    });
-  };
-
-  const handleRefreshAvailability = () => {
-    navigate("/");
+    try {
+      const reserve = await api<{ reservationId: string }>("/checkout/reserve", { method: "POST", body: JSON.stringify({ items: items.map((i) => ({ id: i.id, quantity: i.quantity })) }) }, true);
+      const order = await api<{ orderId: string }>("/orders", { method: "POST", body: JSON.stringify({ reservationId: reserve.reservationId, customerDetails: { ...details, selectedAddress, selectedPayment } }) }, true);
+      navigate(`/order-success/${order.orderId}`, { state: { orderId: order.orderId, items, total } });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   if (items.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header cartCount={0} />
-        <div className="flex items-center justify-center pt-20">
-          <Card className="p-8 text-center max-w-md">
-            <p className="text-gray-600 mb-4">Ваш кошик порожній</p>
-            <Button onClick={() => navigate("/")}>Продовжити покупки</Button>
-          </Card>
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen bg-gray-50"><Header cartCount={0} /><div className="flex items-center justify-center pt-20"><Card className="p-8 text-center max-w-md"><p className="text-gray-600 mb-4">Ваш кошик порожній</p><Button onClick={() => navigate("/")}>Продовжити покупки</Button></Card></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sticky Timer Banner - Key Feature */}
-      <div className="sticky top-0 z-50 bg-gradient-to-r from-[#f97316] to-[#ef4444] text-white py-4 px-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
-          <Clock className="w-5 h-5 animate-pulse" />
-          <p className="font-semibold text-lg">
-            Товари тимчасово зарезервовані. Будь ласка, завершіть оформлення замовлення за{" "}
-            <span className="font-mono text-xl">{formatTime(timeLeft)}</span>
-          </p>
-        </div>
-      </div>
-
-      {/* Header */}
+      <div className="sticky top-0 z-50 bg-gradient-to-r from-[#f97316] to-[#ef4444] text-white py-4 px-4 shadow-lg"><div className="max-w-7xl mx-auto flex items-center justify-center gap-3"><Clock className="w-5 h-5 animate-pulse" /><p className="font-semibold text-lg">Товари зарезервовані на <span className="font-mono text-xl">{formatTime(timeLeft)}</span></p></div></div>
       <Header cartCount={items.length} />
-
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-semibold text-gray-900 mb-8">Оформлення замовлення</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Checkout Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Contact Information */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  1
-                </div>
-                Контактна інформація
-              </h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Ім'я</Label>
-                    <Input id="firstName" placeholder="Іван" />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Прізвище</Label>
-                    <Input id="lastName" placeholder="Петренко" />
-                  </div>
-                </div>
+          <div className="lg:col-span-2">
+            <Card className="p-6 space-y-4">
+              {profile && profile.addresses.length > 0 && (
                 <div>
-                  <Label htmlFor="email">Електронна пошта</Label>
-                  <Input id="email" type="email" placeholder="ivan.petrenko@example.com" />
+                  <Label>Оберіть адресу з профілю</Label>
+                  <select className="w-full mt-1 h-10 rounded-md border border-gray-200 px-3" value={selectedAddress} onChange={(e) => onSelectAddress(e.target.value)}>
+                    {profile.addresses.map((address) => <option key={address.id} value={address.id}>{address.title} — {address.line1}</option>)}
+                  </select>
                 </div>
+              )}
+              {profile && profile.paymentMethods.length > 0 && (
                 <div>
-                  <Label htmlFor="phone">Телефон</Label>
-                  <Input id="phone" type="tel" placeholder="+380 (99) 123-45-67" />
+                  <Label>Оберіть платіжний засіб з профілю</Label>
+                  <select className="w-full mt-1 h-10 rounded-md border border-gray-200 px-3" value={selectedPayment} onChange={(e) => setSelectedPayment(e.target.value)}>
+                    {profile.paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.brand} •••• {method.cardLast4}</option>)}
+                  </select>
                 </div>
-              </div>
-            </Card>
+              )}
 
-            {/* Shipping Address */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  2
-                </div>
-                Адреса доставки
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="address">Вулиця та номер будинку</Label>
-                  <Input id="address" placeholder="вул. Хрещатик, 1" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="city">Місто</Label>
-                    <Input id="city" placeholder="Київ" />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">Область</Label>
-                    <Input id="state" placeholder="Київська" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="zip">Поштовий індекс</Label>
-                  <Input id="zip" placeholder="01001" />
-                </div>
-              </div>
-            </Card>
-
-            {/* Delivery Method */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  3
-                </div>
-                Спосіб доставки
-              </h2>
-              <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod}>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <RadioGroupItem value="standard" id="standard" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-gray-600" />
-                        <span className="font-medium">Стандартна доставка</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">5-7 робочих днів • Безкоштовно</p>
-                    </div>
-                    <span className="font-semibold">$0.00</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <RadioGroupItem value="express" id="express" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-gray-600" />
-                        <span className="font-medium">Експрес доставка</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">2-3 робочих дні</p>
-                    </div>
-                    <span className="font-semibold">$15.00</span>
-                  </label>
-                </div>
-              </RadioGroup>
-            </Card>
-
-            {/* Payment */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  4
-                </div>
-                Оплата
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="cardNumber">Номер картки</Label>
-                  <Input id="cardNumber" placeholder="1234 5678 9012 3456" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="expiry">Термін дії</Label>
-                    <Input id="expiry" placeholder="MM/YY" />
-                  </div>
-                  <div>
-                    <Label htmlFor="cvv">CVV</Label>
-                    <Input id="cvv" placeholder="123" type="password" maxLength={3} />
-                  </div>
-                </div>
-              </div>
+              <Label>Ім'я</Label><Input value={details.firstName} onChange={(e) => setDetails((d) => ({ ...d, firstName: e.target.value }))} />
+              <Label>Прізвище</Label><Input value={details.lastName} onChange={(e) => setDetails((d) => ({ ...d, lastName: e.target.value }))} />
+              <Label>Email</Label><Input type="email" value={details.email} onChange={(e) => setDetails((d) => ({ ...d, email: e.target.value }))} />
+              <Label>Телефон</Label><Input value={details.phone} onChange={(e) => setDetails((d) => ({ ...d, phone: e.target.value }))} />
+              <Label>Адреса</Label><Input value={details.address} onChange={(e) => setDetails((d) => ({ ...d, address: e.target.value }))} />
             </Card>
           </div>
 
-          {/* Order Summary Sidebar - Key Feature */}
-          <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-24">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Підсумок замовлення</h2>
-              
-              <div className="space-y-4 mb-6">
-                {items.map((item: any, idx: number) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                      <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{item.name}</p>
-                      <p className="text-sm text-gray-600">Кіл-ть: {item.quantity}</p>
-                      <p className="font-semibold text-[#1e40af]">${item.price}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t pt-4 space-y-2 mb-6">
-                <div className="flex justify-between text-gray-600">
-                  <span>Проміжний підсумок</span>
-                  <span>${calculateTotal().toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Доставка</span>
-                  <span>{deliveryMethod === "express" ? "$15.00" : "Безкоштовно"}</span>
-                </div>
-                <div className="flex justify-between text-lg font-semibold text-gray-900 pt-2 border-t">
-                  <span>Всього</span>
-                  <span className="text-[#1e40af]">
-                    ${(calculateTotal() + (deliveryMethod === "express" ? 15 : 0)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                className="w-full py-6 text-lg bg-[#1e40af] hover:bg-[#1e3a8a]"
-                onClick={handlePlaceOrder}
-              >
-                <CreditCard className="w-5 h-5 mr-2" />
-                Оформити замовлення
-              </Button>
-
-              <Card className="mt-4 p-3 bg-blue-50 border-blue-200">
-                <p className="text-xs text-blue-900">
-                  <Clock className="w-4 h-4 inline mr-1" />
-                  Ваші товари зарезервовані з жорстким обмеженням часу. Завершіть оформлення до закінчення таймера.
-                </p>
-              </Card>
-            </Card>
-          </div>
+          <div><Card className="p-6 sticky top-24"><h2 className="text-xl font-semibold mb-4">Підсумок</h2>{items.map((item) => <div key={item.id} className="flex justify-between py-2"><span>{item.name} x{item.quantity}</span><span>${(item.price * item.quantity).toFixed(2)}</span></div>)}<div className="border-t mt-3 pt-3 font-semibold">Всього: <span className="text-[#1e40af]">${total.toFixed(2)}</span></div><Button className="w-full mt-4 py-6 text-lg bg-[#1e40af] hover:bg-[#1e3a8a]" onClick={handlePlaceOrder}><CreditCard className="w-5 h-5 mr-2" />Оформити замовлення</Button>{error && <p className="text-red-600 text-sm mt-3">{error}</p>}</Card></div>
         </div>
       </div>
-
-      {/* Expired Reservation Modal - Alternative State */}
-      <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Clock className="w-6 h-6" />
-              Час резервування закінчився
-            </DialogTitle>
-            <DialogDescription className="pt-4">
-              Час вашого резервування минув. Товари повернуто на загальний склад. Будь ласка, оновіть наявність і спробуйте знову.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 pt-4">
-            <Button
-              className="w-full bg-[#1e40af] hover:bg-[#1e3a8a]"
-              onClick={handleRefreshAvailability}
-            >
-              Оновити наявність
-            </Button>
-            <Button variant="outline" className="w-full" onClick={() => setShowExpiredModal(false)}>
-              Скасувати
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
