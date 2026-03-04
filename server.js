@@ -14,7 +14,6 @@ app.use(express.json());
 
 // ==========================================
 // ГЛОБАЛЬНЕ ПЕРЕХОПЛЕННЯ ПОМИЛОК
-// (Щоб Heroku не видавав H10 при найменшій проблемі)
 // ==========================================
 process.on('uncaughtException', (err) => {
   console.error('🔥 КРИТИЧНА ПОМИЛКА (uncaughtException):', err);
@@ -59,7 +58,7 @@ const readDB = () => {
     return JSON.parse(readFileSync(DB_PATH, "utf-8"));
   } catch (err) {
     console.error("❌ Помилка при читанні бази даних:", err);
-    return defaultDB(); // Повертаємо пусту базу, щоб сервер не впав
+    return defaultDB();
   }
 };
 
@@ -525,7 +524,7 @@ try {
   const distPath = resolve(process.cwd(), "dist");
   app.use(express.static(distPath));
 
-  app.get("*", (req, res) => {
+  app.use((req, res) => {
     const indexPath = join(distPath, "index.html");
     if (existsSync(indexPath)) {
       res.sendFile(indexPath);
