@@ -2,11 +2,13 @@ import express from "express";
 import cors from "cors";
 import crypto from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
 import TelegramBot from "node-telegram-bot-api";
 
 const app = express();
-const PORT = 3000;
+
+// ✅ ВИПРАВЛЕНО: Тепер сервер використовує порт, який надає Heroku
+const PORT = process.env.PORT || 3000;
 const DB_PATH = resolve(process.cwd(), "data", "db.json");
 
 app.use(cors());
@@ -95,6 +97,10 @@ function authMiddleware(req, res, next) {
   req.user = user;
   return next();
 }
+
+// ==========================================
+// API ROUTES
+// ==========================================
 
 app.get("/api/products", (req, res) => {
   releaseExpiredReservations();
@@ -292,10 +298,9 @@ app.post("/api/orders", authMiddleware, (req, res) => {
 // ТЕЛЕГРАМ БОТ
 // ==========================================
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M"; 
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "ТВІЙ_ТОКЕН_ТУТ"; 
 
-// Ініціалізація тільки якщо токен вказано
-if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
+if (TELEGRAM_TOKEN !== "ТВІЙ_ТОКЕН_ТУТ") {
   const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
   const tgUserStates = new Map();
@@ -323,7 +328,6 @@ if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
 
     const state = tgUserStates.get(chatId);
 
-    // Логіка оформлення замовлення
     if (state === "AWAITING_NAME") {
       tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), name: text });
       tgUserStates.set(chatId, "AWAITING_PHONE");
@@ -349,7 +353,6 @@ if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
       return;
     }
 
-    // Головне меню
     if (text === "🛍 Каталог") {
       releaseExpiredReservations();
       const db = readDB();
@@ -455,7 +458,6 @@ if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
     const product = db.products.find(p => p.id === productId);
     if (!product || product.stock < 1) return false;
 
-    // Віднімаємо сток моментально, так само як на сайті
     product.stock -= 1;
     
     const tgUserId = `tg-${chatId}`;
@@ -467,7 +469,6 @@ if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
         }
     }
 
-    // 15 хвилин резерву
     if (!reservation) {
         resId = generateId("res");
         reservation = { userId: tgUserId, items: [], expiresAt: Date.now() + 15 * 60 * 1000 };
@@ -527,4 +528,17 @@ if (TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
   console.log("⚠️ Токен Telegram-бота не знайдено. Бот не запущено.");
 }
 
-app.listen(PORT, () => console.log(`✅ Backend сервер запущено на http://localhost:${PORT}`));
+// ==========================================
+// РОЗДАЧА ФРОНТЕНДУ (САЙТУ)
+// ==========================================
+
+// Вказуємо папку dist, де лежить зібраний Vite застосунок
+const distPath = resolve(process.cwd(), "dist");
+app.use(express.static(distPath));
+
+// Для всіх інших роутів (щоб працював React Router) повертаємо index.html
+app.get("*", (req, res) => {
+  res.sendFile(join(distPath, "index.html"));
+});
+
+app.listen(PORT, () => console.log(`✅ Backend сервер запущено на порту ${PORT}`));
