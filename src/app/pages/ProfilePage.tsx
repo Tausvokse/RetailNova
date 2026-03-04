@@ -1,377 +1,129 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "../components/Header";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { User, Package, MapPin, CreditCard, Bell, Shield } from "lucide-react";
+import { User, Package, CreditCard, Bell, Shield } from "lucide-react";
+import { api, clearToken, getToken } from "../lib/api";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../components/ui/dialog";
+import { resetCartOwnerToGuest } from "../lib/cart";
+
+type ProfileData = any;
 
 export function ProfilePage() {
   const [activeTab, setActiveTab] = useState("profile");
+  const [data, setData] = useState<ProfileData | null>(null);
+  const [message, setMessage] = useState("");
+  const [newCard, setNewCard] = useState({ holderName: "", cardNumber: "", cvv: "", expiry: "", brand: "Visa", isDefault: false });
+  const [paymentError, setPaymentError] = useState("");
+  const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+
+  const loadProfile = () => api<ProfileData>("/profile", {}, true).then(setData).catch(() => setData(null));
+  useEffect(() => { if (getToken()) loadProfile(); }, []);
 
   const tabs = [
     { id: "profile", name: "Профіль", icon: User },
     { id: "orders", name: "Замовлення", icon: Package },
-    { id: "addresses", name: "Адреси", icon: MapPin },
     { id: "payment", name: "Оплата", icon: CreditCard },
     { id: "notifications", name: "Сповіщення", icon: Bell },
     { id: "security", name: "Безпека", icon: Shield },
   ];
 
-  const orders = [
-    {
-      id: "RN-1234",
-      date: "25 лютого 2026",
-      status: "Доставлено",
-      total: 249.99,
-      items: 1,
-    },
-    {
-      id: "RN-1235",
-      date: "20 лютого 2026",
-      status: "В дорозі",
-      total: 1299.99,
-      items: 1,
-    },
-    {
-      id: "RN-1236",
-      date: "15 лютого 2026",
-      status: "Підтверджено",
-      total: 399.99,
-      items: 2,
-    },
-  ];
+  if (!getToken()) return <div className="min-h-screen bg-gray-50"><Header cartCount={0} /><div className="max-w-3xl mx-auto p-10"><Card className="p-8 text-center">Для перегляду профілю потрібно авторизуватись на сторінці оформлення замовлення.</Card></div></div>;
+  if (!data) return <div className="min-h-screen bg-gray-50"><Header cartCount={0} /><div className="max-w-3xl mx-auto p-10">Завантаження...</div></div>;
+
+  const saveProfile = async () => {
+    await api("/profile", { method: "PUT", body: JSON.stringify(data.user) }, true);
+    setMessage("Профіль оновлено");
+  };
+
+  const validatePayment = () => {
+    const cardDigits = newCard.cardNumber.replace(/\D/g, "");
+    const cvvDigits = newCard.cvv.replace(/\D/g, "");
+    const expiry = newCard.expiry.trim();
+
+    if (!newCard.holderName.trim()) return "Вкажіть ім'я власника карти.";
+    if (cardDigits.length !== 16) return "Номер карти має містити 16 цифр.";
+    if (cvvDigits.length !== 3) return "CVV має містити 3 цифри.";
+    if (!/^\d{2}\/\d{2}$/.test(expiry)) return "Термін дії має бути у форматі ММ/РР.";
+
+    const [mm] = expiry.split("/").map(Number);
+    if (mm < 1 || mm > 12) return "Місяць має бути від 01 до 12.";
+
+    return "";
+  };
+
+  const addCard = async () => {
+    const error = validatePayment();
+    if (error) {
+      setPaymentError(error);
+      return;
+    }
+
+    const cardDigits = newCard.cardNumber.replace(/\D/g, "");
+    const [expMonth, expYear] = newCard.expiry.split("/");
+
+    await api(
+      "/profile/payment-methods",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          holderName: newCard.holderName.trim(),
+          cardLast4: cardDigits.slice(-4),
+          expMonth,
+          expYear,
+          brand: newCard.brand,
+          isDefault: newCard.isDefault,
+        }),
+      },
+      true,
+    );
+
+    setPaymentError("");
+    setNewCard({ holderName: "", cardNumber: "", cvv: "", expiry: "", brand: "Visa", isDefault: false });
+    loadProfile();
+  };
 
   const renderContent = () => {
     switch (activeTab) {
       case "profile":
-        return (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-                Особиста інформація
-              </h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Ім'я</Label>
-                    <Input id="firstName" defaultValue="Іван" />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Прізвище</Label>
-                    <Input id="lastName" defaultValue="Петренко" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="email">Електронна пошта</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    defaultValue="ivan.petrenko@example.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Телефон</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    defaultValue="+380 (99) 123-45-67"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="birthday">Дата народження</Label>
-                  <Input id="birthday" type="date" defaultValue="1990-01-15" />
-                </div>
-                <Button className="bg-[#1e40af] hover:bg-[#1e3a8a]">
-                  Зберегти зміни
-                </Button>
-              </div>
-            </div>
-          </div>
-        );
-
+        return <div className="space-y-4"><Label>Ім'я</Label><Input value={data.user.firstName || ""} onChange={(e) => setData({ ...data, user: { ...data.user, firstName: e.target.value } })} /><Label>Прізвище</Label><Input value={data.user.lastName || ""} onChange={(e) => setData({ ...data, user: { ...data.user, lastName: e.target.value } })} /><Label>Email</Label><Input value={data.user.email || ""} onChange={(e) => setData({ ...data, user: { ...data.user, email: e.target.value } })} /><Label>Телефон</Label><Input value={data.user.phone || ""} onChange={(e) => setData({ ...data, user: { ...data.user, phone: e.target.value } })} /><Button className="bg-[#1e40af]" onClick={saveProfile}>Зберегти зміни</Button></div>;
       case "orders":
-        return (
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Історія замовлень
-            </h2>
-            <div className="space-y-4">
-              {orders.map((order) => (
-                <Card key={order.id} className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        Замовлення #{order.id}
-                      </p>
-                      <p className="text-sm text-gray-600">{order.date}</p>
-                    </div>
-                    <div className="text-right">
-                      <div
-                        className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                          order.status === "Доставлено"
-                            ? "bg-green-100 text-green-700"
-                            : order.status === "В дорозі"
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-orange-100 text-orange-700"
-                        }`}
-                      >
-                        {order.status}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-4">
-                    <div>
-                      <p className="text-sm text-gray-600">
-                        Товарів: {order.items}
-                      </p>
-                      <p className="font-semibold text-[#1e40af]">
-                        ${order.total}
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Переглянути деталі
-                    </Button>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-        );
-
-      case "addresses":
-        return (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900">
-                Адреси доставки
-              </h2>
-              <Button className="bg-[#1e40af] hover:bg-[#1e3a8a]">
-                Додати адресу
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <Card className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="font-semibold text-gray-900">
-                        Домашня адреса
-                      </p>
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">
-                        За замовчуванням
-                      </span>
-                    </div>
-                    <p className="text-gray-600">Іван Петренко</p>
-                    <p className="text-gray-600">вул. Хрещатик, 1</p>
-                    <p className="text-gray-600">Київ, Київська область, 01001</p>
-                    <p className="text-gray-600">+380 (99) 123-45-67</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      Редагувати
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Видалити
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        );
-
+        return <div className="space-y-4">{data.orders.map((o: any) => <Card key={o.id} className="p-4"><div className="flex justify-between items-start gap-3"><div><p>Замовлення #{o.id}</p><p className="text-sm text-gray-600">{new Date(o.date).toLocaleString("uk-UA")} — {o.status}</p></div><div className="text-right"><p className="font-semibold mb-2">${o.total.toFixed(2)}</p><Button variant="outline" size="sm" onClick={() => setSelectedOrder(o)}>Деталі</Button></div></div></Card>)}</div>;
       case "payment":
-        return (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900">
-                Способи оплати
-              </h2>
-              <Button className="bg-[#1e40af] hover:bg-[#1e3a8a]">
-                Додати картку
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <Card className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-10 bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-center">
-                      <CreditCard className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        •••• •••• •••• 1234
-                      </p>
-                      <p className="text-sm text-gray-600">Дійсна до 12/26</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
-                      Редагувати
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Видалити
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
-        );
-
+        return <div className="space-y-4">{data.paymentMethods.map((m: any) => <Card key={m.id} className="p-4 flex justify-between"><p>{m.brand} •••• {m.cardLast4}</p><Button variant="outline" size="sm" onClick={async () => { await api(`/profile/payment-methods/${m.id}`, { method: "DELETE" }, true); loadProfile(); }}>Видалити</Button></Card>)}<Card className="p-4 space-y-2"><Input placeholder="Ім'я власника" value={newCard.holderName} onChange={(e) => setNewCard({ ...newCard, holderName: e.target.value })} /><Input placeholder="Номер карти (16 цифр)" value={newCard.cardNumber} onChange={(e) => setNewCard({ ...newCard, cardNumber: e.target.value })} /><Input placeholder="CVV (3 цифри)" value={newCard.cvv} onChange={(e) => setNewCard({ ...newCard, cvv: e.target.value })} /><Input placeholder="ММ/РР" value={newCard.expiry} onChange={(e) => setNewCard({ ...newCard, expiry: e.target.value })} />{paymentError && <p className="text-sm text-red-600">{paymentError}</p>}<Button className="bg-[#1e40af]" onClick={addCard}>Додати картку</Button></Card></div>;
       case "notifications":
-        return (
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Налаштування сповіщень
-            </h2>
-            <div className="space-y-4">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="font-semibold text-gray-900">
-                      Email сповіщення
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Отримувати оновлення про замовлення на email
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="w-5 h-5 text-[#1e40af] rounded focus:ring-[#1e40af]"
-                  />
-                </div>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="font-semibold text-gray-900">SMS сповіщення</p>
-                    <p className="text-sm text-gray-600">
-                      Отримувати важливі оновлення через SMS
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    defaultChecked
-                    className="w-5 h-5 text-[#1e40af] rounded focus:ring-[#1e40af]"
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-900">
-                      Маркетингові розсилки
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Отримувати спеціальні пропозиції та знижки
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    className="w-5 h-5 text-[#1e40af] rounded focus:ring-[#1e40af]"
-                  />
-                </div>
-              </Card>
-            </div>
-          </div>
-        );
-
+        return <div className="space-y-4"><label className="flex justify-between">Email<input type="checkbox" checked={data.notifications?.email} onChange={async (e) => { await api("/profile/notifications", { method: "PUT", body: JSON.stringify({ email: e.target.checked }) }, true); loadProfile(); }} /></label><label className="flex justify-between">SMS<input type="checkbox" checked={data.notifications?.sms} onChange={async (e) => { await api("/profile/notifications", { method: "PUT", body: JSON.stringify({ sms: e.target.checked }) }, true); loadProfile(); }} /></label><label className="flex justify-between">Маркетинг<input type="checkbox" checked={data.notifications?.marketing} onChange={async (e) => { await api("/profile/notifications", { method: "PUT", body: JSON.stringify({ marketing: e.target.checked }) }, true); loadProfile(); }} /></label></div>;
       case "security":
-        return (
-          <div>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
-              Безпека акаунту
-            </h2>
-            <div className="space-y-6">
-              <Card className="p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">
-                  Зміна пароля
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="currentPassword">Поточний пароль</Label>
-                    <Input id="currentPassword" type="password" />
-                  </div>
-                  <div>
-                    <Label htmlFor="newPassword">Новий пароль</Label>
-                    <Input id="newPassword" type="password" />
-                  </div>
-                  <div>
-                    <Label htmlFor="confirmPassword">
-                      Підтвердіть новий пароль
-                    </Label>
-                    <Input id="confirmPassword" type="password" />
-                  </div>
-                  <Button className="bg-[#1e40af] hover:bg-[#1e3a8a]">
-                    Оновити пароль
-                  </Button>
-                </div>
-              </Card>
-              <Card className="p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">
-                  Двофакторна автентифікація
-                </h3>
-                <p className="text-gray-600 mb-4">
-                  Додайте додатковий рівень безпеки до вашого акаунту
-                </p>
-                <Button variant="outline">Увімкнути 2FA</Button>
-              </Card>
-            </div>
-          </div>
-        );
-
+        return <div className="space-y-4"><Button variant="outline" onClick={async () => { await api("/profile/security/2fa", { method: "PUT", body: JSON.stringify({ enabled: !data.security?.twoFactorEnabled }) }, true); loadProfile(); }}>{data.security?.twoFactorEnabled ? "Вимкнути" : "Увімкнути"} 2FA</Button><Button variant="outline" onClick={() => { clearToken(); resetCartOwnerToGuest(); window.location.href = "/catalog"; }}>Вийти з акаунту</Button></div>;
       default:
         return null;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header cartCount={0} />
+    <div className="min-h-screen bg-gray-50"><Header cartCount={0} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"><h1 className="text-3xl font-semibold mb-8">Мій профіль</h1>{message && <p className="text-green-700 mb-4">{message}</p>}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8"><aside className="lg:col-span-1"><Card className="p-6"><div className="text-center mb-6"><div className="w-20 h-20 bg-[#1e40af] rounded-full flex items-center justify-center mx-auto mb-3"><User className="w-10 h-10 text-white" /></div><p className="font-semibold text-gray-900">{data.user.firstName} {data.user.lastName}</p><p className="text-sm text-gray-600">{data.user.email}</p></div><nav className="space-y-1">{tabs.map((tab) => { const Icon = tab.icon; return <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === tab.id ? "bg-[#1e40af] text-white" : "hover:bg-gray-100 text-gray-700"}`}><Icon className="w-5 h-5" />{tab.name}</button>; })}</nav></Card></aside><div className="lg:col-span-3"><Card className="p-8">{renderContent()}</Card></div></div>
+      </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-3xl font-semibold text-gray-900 mb-8">
-          Мій профіль
-        </h1>
-
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar */}
-          <aside className="lg:col-span-1">
-            <Card className="p-6">
-              <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-[#1e40af] rounded-full flex items-center justify-center mx-auto mb-3">
-                  <User className="w-10 h-10 text-white" />
-                </div>
-                <p className="font-semibold text-gray-900">Іван Петренко</p>
-                <p className="text-sm text-gray-600">ivan.petrenko@example.com</p>
-              </div>
-              <nav className="space-y-1">
-                {tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                        activeTab === tab.id
-                          ? "bg-[#1e40af] text-white"
-                          : "hover:bg-gray-100 text-gray-700"
-                      }`}
-                    >
-                      <Icon className="w-5 h-5" />
-                      {tab.name}
-                    </button>
-                  );
-                })}
-              </nav>
-            </Card>
-          </aside>
-
-          {/* Main Content */}
-          <div className="lg:col-span-3">
-            <Card className="p-8">{renderContent()}</Card>
-          </div>
-        </div>
-      </main>
+      <Dialog open={Boolean(selectedOrder)} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Деталі замовлення {selectedOrder?.id}</DialogTitle>
+          </DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-3">
+              <p><strong>Отримувач:</strong> {selectedOrder.customerDetails?.recipientName || "—"}</p>
+              <p><strong>Номер отримувача:</strong> {selectedOrder.customerDetails?.recipientPhone || "—"}</p>
+              <p><strong>Відділення:</strong> {selectedOrder.customerDetails?.novaPoshtaBranch?.shortName || selectedOrder.customerDetails?.deliveryAddress || "—"}</p>
+              {selectedOrder.items?.map((item: any, idx: number) => <div key={idx} className="flex justify-between border-b pb-2"><span>{item.name} × {item.quantity}</span><span>${(item.price * item.quantity).toFixed(2)}</span></div>)}
+              <div className="font-semibold text-right">Всього: ${selectedOrder.total?.toFixed(2)}</div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

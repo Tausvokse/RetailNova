@@ -10,7 +10,7 @@ export function ContactsPage() {
     {
       icon: Phone,
       title: "Телефон",
-      details: ["+380 (44) 123-45-67", "+380 (99) 987-65-43"],
+      details: ["+38 (096) 318 96 40"],
       color: "text-blue-600",
       bgColor: "bg-blue-100",
     },
@@ -24,7 +24,7 @@ export function ContactsPage() {
     {
       icon: MapPin,
       title: "Адреса",
-      details: ["вул. Хрещатик, 1", "Київ, Україна, 01001"],
+      details: ["вул. Борщагівська, 192", "Київ, Україна, 01001", "Біля 5 гуртожитку КАІ"],
       color: "text-purple-600",
       bgColor: "bg-purple-100",
     },
@@ -158,19 +158,6 @@ export function ContactsPage() {
                 </p>
                 <div className="space-y-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <div className="w-2 h-2 rounded-full bg-green-600" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        Онлайн-чат доступний
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Пн-Пт: 9:00 - 21:00
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
                     <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <Mail className="w-3 h-3 text-blue-600" />
                     </div>
@@ -224,10 +211,19 @@ export function ContactsPage() {
                 Відвідайте нас
               </h3>
               <p className="text-gray-600 mb-4">
-                вул. Хрещатик, 1, Київ, Україна, 01001
+                вул. Борщагівська, 192, Київ, Україна, 01001
               </p>
-              <div className="bg-gray-300 h-64 rounded-lg flex items-center justify-center">
-                <p className="text-gray-500">Карта розташування офісу</p>
+              <div className="bg-gray-300 h-64 rounded-lg overflow-hidden relative shadow-inner">
+                <iframe
+                  title="Офіс компанії на Google Maps"
+                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2540.9656707495774!2d30.435152998125368!3d50.44174009269467!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x40d4cc19a660625f%3A0xab2201d17807c03c!2z0LLRg9C70LjRhtGPINCR0L7RgNGJ0LDQs9GW0LLRgdGM0LrQsCwgMTkzLCDQmtC40ZfQsiwgMDIwMDA!5e0!3m2!1suk!2sua!4v1772614589810!5m2!1suk!2sua"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                  className="absolute inset-0 w-full h-full"
+                ></iframe>
               </div>
             </Card>
           </div>
