@@ -1,0 +1,723 @@
+{
+  "products": [
+    {
+      "id": "prod-001",
+      "name": "Преміум бездротові навушники",
+      "price": 249.99,
+      "category": "audio",
+      "stock": 5,
+      "description": "Насолоджуйтесь чудовою якістю звуку з нашими преміум бездротовими навушниками.",
+      "image": "https://images.unsplash.com/photo-1738920424218-3d28b951740a?w=800&q=80",
+      "badge": "Новинка",
+      "features": [
+        "Активне шумозаглушення",
+        "30 годин автономної роботи",
+        "Bluetooth 5.0"
+      ]
+    },
+    {
+      "id": "prod-002",
+      "name": "Професійний ноутбук",
+      "price": 1299.99,
+      "category": "computers",
+      "stock": 14,
+      "description": "Потужний та легкий ноутбук для роботи.",
+      "image": "https://images.unsplash.com/photo-1770048792336-e2ca27785b12?w=800&q=80",
+      "badge": "Хіт продажів",
+      "features": [
+        "Intel Core Ultra",
+        "32 GB RAM",
+        "OLED дисплей"
+      ]
+    },
+    {
+      "id": "prod-003",
+      "name": "Розумний годинник",
+      "price": 399.99,
+      "category": "wearables",
+      "stock": 8,
+      "description": "Відстежуйте активність і здоров'я щодня.",
+      "image": "https://images.unsplash.com/photo-1716234479503-c460b87bdf98?w=800&q=80",
+      "features": [
+        "GPS",
+        "ECG",
+        "7 днів автономності"
+      ]
+    },
+    {
+      "id": "prod-004",
+      "name": "Бездротові навушники Pro",
+      "price": 199.99,
+      "category": "audio",
+      "stock": 0,
+      "description": "Компактні навушники з насиченим звуком.",
+      "image": "https://images.unsplash.com/photo-1755182529034-189a6051faae?w=800&q=80",
+      "badge": "Новинка",
+      "features": [
+        "ANC",
+        "24 години",
+        "IPX4"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "usr-83701505",
+      "firstName": "Владислав",
+      "lastName": "Пархомчук",
+      "email": "parhom137@gmail.com",
+      "phone": "",
+      "birthday": "",
+      "passwordHash": "606ad5c423d546d3f5d94e151531bed7305d6c4c17a542fa7995f60bb2d3e3c9"
+    },
+    {
+      "id": "usr-6e8c9110",
+      "firstName": "123",
+      "lastName": "312",
+      "email": "parhom1327@gmail.com",
+      "phone": "",
+      "birthday": "",
+      "passwordHash": "606ad5c423d546d3f5d94e151531bed7305d6c4c17a542fa7995f60bb2d3e3c9"
+    },
+    {
+      "id": "usr-357ea57c",
+      "firstName": "sad",
+      "lastName": "asda",
+      "email": "parhom13127@gmail.com",
+      "phone": "",
+      "birthday": "",
+      "passwordHash": "606ad5c423d546d3f5d94e151531bed7305d6c4c17a542fa7995f60bb2d3e3c9"
+    },
+    {
+      "id": "usr-abc4bbea",
+      "firstName": "12313",
+      "lastName": "12321",
+      "email": "parhom1372@gmail.com",
+      "phone": "",
+      "birthday": "",
+      "passwordHash": "606ad5c423d546d3f5d94e151531bed7305d6c4c17a542fa7995f60bb2d3e3c9"
+    }
+  ],
+  "addresses": [],
+  "paymentMethods": [],
+  "notificationSettings": [
+    {
+      "userId": "usr-83701505",
+      "email": true,
+      "sms": true,
+      "marketing": false
+    },
+    {
+      "userId": "usr-6e8c9110",
+      "email": true,
+      "sms": true,
+      "marketing": false
+    },
+    {
+      "userId": "usr-357ea57c",
+      "email": true,
+      "sms": true,
+      "marketing": false
+    },
+    {
+      "userId": "usr-abc4bbea",
+      "email": true,
+      "sms": true,
+      "marketing": false
+    }
+  ],
+  "securitySettings": [
+    {
+      "userId": "usr-83701505",
+      "twoFactorEnabled": false
+    },
+    {
+      "userId": "usr-6e8c9110",
+      "twoFactorEnabled": false
+    },
+    {
+      "userId": "usr-357ea57c",
+      "twoFactorEnabled": false
+    },
+    {
+      "userId": "usr-abc4bbea",
+      "twoFactorEnabled": false
+    }
+  ],
+  "sessions": [
+    {
+      "token": "0c723864b006cad840bc185f563ae691ede629b497f641d7",
+      "userId": "usr-abc4bbea",
+      "createdAt": "2026-03-04T08:48:49.904Z"
+    }
+  ],
+  "orders": [
+    {
+      "id": "RN-2893",
+      "userId": "usr-6e8c9110",
+      "date": "2026-03-03T22:55:05.000Z",
+      "status": "Підтверджено",
+      "items": [
+        {
+          "productId": "prod-004",
+          "quantity": 3,
+          "price": 199.99,
+          "name": "Бездротові навушники Pro",
+          "image": "https://images.unsplash.com/photo-1755182529034-189a6051faae?w=800&q=80"
+        }
+      ],
+      "customerDetails": {
+        "recipientName": "312 123",
+        "recipientPhone": "+380963189640",
+        "selectedPayment": "",
+        "deliveryMethod": "nova-poshta",
+        "novaPoshtaBranch": {
+          "id": 12586,
+          "name": "Відділення №220 (до 30 кг): вул. Борщагівська, 206",
+          "shortName": "Відділення №220 (до 30 кг): вул. Борщагівська, 206",
+          "settlement": {
+            "id": 118064,
+            "name": "місто Київ"
+          },
+          "region": null,
+          "parent": null,
+          "address": "03058, Україна, Київська область, місто Київ, Борщагівська, 206",
+          "addressParts": {
+            "postCode": "03058",
+            "building": "206",
+            "street": "Борщагівська",
+            "city": "місто Київ",
+            "region": "Київська область",
+            "note": "",
+            "block": ""
+          },
+          "number": "220",
+          "index": "11/220",
+          "status": "Working",
+          "customerServiceAvailable": true,
+          "divisionCategory": "PostBranch",
+          "publicPhones": [
+            "0-800-500-609"
+          ],
+          "internalPhones": [
+            "0631592782"
+          ],
+          "responsiblePerson": "Свирида Андрій Олегович",
+          "partner": null,
+          "ownerDivision": null,
+          "externalId": "08eb2bb4-b379-11e4-a77a-005056887b8d",
+          "source": "NPUA",
+          "countryCode": "UA",
+          "latitude": 50.442462,
+          "longitude": 30.435155,
+          "distance": null,
+          "maxWeightPlaceSender": 30,
+          "maxLengthPlaceSender": 120,
+          "maxWidthPlaceSender": 70,
+          "maxHeightPlaceSender": 70,
+          "maxWeightPlaceRecipient": 30,
+          "maxLengthPlaceRecipient": 120,
+          "maxWidthPlaceRecipient": 70,
+          "maxHeightPlaceRecipient": 70,
+          "maxCostPlace": 99999999.99,
+          "maxDeclaredCostPlace": 99999999.99,
+          "prohibitedSending": false,
+          "prohibitedIssuance": false,
+          "workSchedule": [
+            {
+              "day": "sunday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "monday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "tuesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "wednesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "thursday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "friday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "saturday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            }
+          ],
+          "settings": [
+            {
+              "id": 250,
+              "divisionId": 12586,
+              "name": "additionalId",
+              "value": "08eb2bb5-b379-11e4-a77a-005056887b8d",
+              "from": "2025-04-21T11:20:42.046153Z",
+              "to": "3024-04-21T11:20:42.046158Z",
+              "createdAt": "2022-10-01T17:15:23.000000Z",
+              "updatedAt": "2026-03-03T21:36:13.357065Z",
+              "deletedAt": null
+            }
+          ],
+          "createdAt": "2022-10-01T17:15:23.000000Z",
+          "updatedAt": "2026-03-03T21:36:13.383676Z",
+          "deletedAt": null,
+          "photos": [],
+          "attributes": {
+            "servicingDepartmentForParcel": 928153,
+            "servicingDepartmentForCargo": 928153,
+            "hasGenerator": true,
+            "hasMirror": true,
+            "charging": true,
+            "callButton": true
+          },
+          "refCity": {
+            "id": 118064,
+            "name": "місто Київ",
+            "country": {
+              "code": "UA",
+              "name": "Україна"
+            },
+            "region": {
+              "id": 406,
+              "name": "Київська область",
+              "parent": null
+            },
+            "latitude": 50.450418,
+            "longitude": 30.523541,
+            "postCode1": "01001",
+            "postCode2": "04215",
+            "alternativeNames": [
+              "kyiv",
+              "місто київ",
+              "misto kiyiv",
+              "город киев",
+              "gorod kiev",
+              "city kyiv"
+            ],
+            "externalId": "e718a680-4b33-11e4-ab6d-005056801329",
+            "boost": 490,
+            "prohibitedSending": false,
+            "prohibitedIssuance": false,
+            "createdAt": "2022-10-01T15:50:20.000000Z",
+            "updatedAt": "2026-03-03T22:28:20.358818Z",
+            "deletedAt": null,
+            "shortName": "Київ"
+          }
+        },
+        "deliveryAddress": "Відділення №220 (до 30 кг): вул. Борщагівська, 206 місто Київ вул. Борщагівська, 206"
+      },
+      "total": 599.97
+    },
+    {
+      "id": "RN-4811",
+      "userId": "usr-6e8c9110",
+      "date": "2026-03-04T08:47:20.464Z",
+      "status": "Підтверджено",
+      "items": [
+        {
+          "productId": "prod-001",
+          "quantity": 1,
+          "price": 249.99,
+          "name": "Преміум бездротові навушники",
+          "image": "https://images.unsplash.com/photo-1738920424218-3d28b951740a?w=800&q=80"
+        }
+      ],
+      "customerDetails": {
+        "recipientName": "312 123",
+        "recipientPhone": "sdasda",
+        "selectedPayment": "",
+        "deliveryMethod": "nova-poshta",
+        "novaPoshtaBranch": {
+          "id": 7162,
+          "name": "Відділення №1: вул. Пирогівський шлях, 135",
+          "shortName": "Відділення №1: вул. Пирогівський шлях, 135",
+          "settlement": {
+            "id": 118064,
+            "name": "місто Київ"
+          },
+          "region": null,
+          "parent": null,
+          "address": "03026, Україна, Київська область, місто Київ, Пирогівський Шлях (Червонопрапорна), 135",
+          "addressParts": {
+            "postCode": "03026",
+            "building": "135",
+            "street": "Пирогівський Шлях (Червонопрапорна)",
+            "city": "місто Київ",
+            "region": "Київська область",
+            "note": "",
+            "block": ""
+          },
+          "number": "1",
+          "index": "11/1",
+          "status": "Working",
+          "customerServiceAvailable": true,
+          "divisionCategory": "CargoBranch",
+          "publicPhones": [
+            "0-800-500-609"
+          ],
+          "internalPhones": [
+            "0631591621"
+          ],
+          "responsiblePerson": "Лавренюк Оксана Миколаївна",
+          "partner": null,
+          "ownerDivision": null,
+          "externalId": "1ec09d88-e1c2-11e3-8c4a-0050568002cf",
+          "source": "NPUA",
+          "countryCode": "UA",
+          "latitude": 50.354786,
+          "longitude": 30.542884,
+          "distance": null,
+          "maxWeightPlaceSender": 1100,
+          "maxLengthPlaceSender": 600,
+          "maxWidthPlaceSender": 220,
+          "maxHeightPlaceSender": 220,
+          "maxWeightPlaceRecipient": 1100,
+          "maxLengthPlaceRecipient": 600,
+          "maxWidthPlaceRecipient": 220,
+          "maxHeightPlaceRecipient": 220,
+          "maxCostPlace": 99999999.99,
+          "maxDeclaredCostPlace": 99999999.99,
+          "prohibitedSending": false,
+          "prohibitedIssuance": false,
+          "workSchedule": [
+            {
+              "day": "sunday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "monday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "tuesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "wednesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "thursday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "friday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "saturday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            }
+          ],
+          "settings": [
+            {
+              "id": 44,
+              "divisionId": 7162,
+              "name": "additionalId",
+              "value": "6c48fc87-59d4-11df-9997-000c29f9e806",
+              "from": "2025-04-21T13:47:35.557740Z",
+              "to": "3024-04-21T13:47:35.557746Z",
+              "createdAt": "2022-10-01T16:54:30.000000Z",
+              "updatedAt": "2026-03-03T21:29:35.554865Z",
+              "deletedAt": null
+            }
+          ],
+          "createdAt": "2022-10-01T16:54:30.000000Z",
+          "updatedAt": "2026-03-03T21:29:35.579049Z",
+          "deletedAt": null,
+          "photos": [],
+          "attributes": {
+            "servicingDepartmentForParcel": 928089,
+            "servicingDepartmentForCargo": 934624,
+            "bikeParking": true,
+            "hasGenerator": true,
+            "hasMirror": true,
+            "hasFittingRoom": true,
+            "clientComfortZone": true,
+            "selfServiceWorkplacesCount": 1,
+            "callButton": true,
+            "ramp": true,
+            "parking": true,
+            "novaPayServices": true
+          },
+          "refCity": {
+            "id": 118064,
+            "name": "місто Київ",
+            "country": {
+              "code": "UA",
+              "name": "Україна"
+            },
+            "region": {
+              "id": 406,
+              "name": "Київська область",
+              "parent": null
+            },
+            "latitude": 50.450418,
+            "longitude": 30.523541,
+            "postCode1": "01001",
+            "postCode2": "04215",
+            "alternativeNames": [
+              "kyiv",
+              "місто київ",
+              "misto kiyiv",
+              "город киев",
+              "gorod kiev",
+              "city kyiv"
+            ],
+            "externalId": "e718a680-4b33-11e4-ab6d-005056801329",
+            "boost": 495,
+            "prohibitedSending": false,
+            "prohibitedIssuance": false,
+            "createdAt": "2022-10-01T15:50:20.000000Z",
+            "updatedAt": "2024-12-12T11:03:53.874011Z",
+            "deletedAt": null,
+            "shortName": "Київ"
+          }
+        },
+        "deliveryAddress": "Відділення №1: вул. Пирогівський шлях, 135 місто Київ вул. Пирогівський Шлях (Червонопрапорна), 135"
+      },
+      "total": 249.99
+    },
+    {
+      "id": "RN-4222",
+      "userId": "usr-abc4bbea",
+      "date": "2026-03-04T08:51:36.722Z",
+      "status": "Підтверджено",
+      "items": [
+        {
+          "productId": "prod-002",
+          "quantity": 1,
+          "price": 1299.99,
+          "name": "Професійний ноутбук",
+          "image": "https://images.unsplash.com/photo-1770048792336-e2ca27785b12?w=800&q=80"
+        }
+      ],
+      "customerDetails": {
+        "recipientName": "12321 12313",
+        "recipientPhone": "1231212312",
+        "selectedPayment": "",
+        "deliveryMethod": "nova-poshta",
+        "novaPoshtaBranch": {
+          "id": 7162,
+          "name": "Відділення №1: вул. Пирогівський шлях, 135",
+          "shortName": "Відділення №1: вул. Пирогівський шлях, 135",
+          "settlement": {
+            "id": 118064,
+            "name": "місто Київ"
+          },
+          "region": null,
+          "parent": null,
+          "address": "03026, Україна, Київська область, місто Київ, Пирогівський Шлях (Червонопрапорна), 135",
+          "addressParts": {
+            "postCode": "03026",
+            "building": "135",
+            "street": "Пирогівський Шлях (Червонопрапорна)",
+            "city": "місто Київ",
+            "region": "Київська область",
+            "note": "",
+            "block": ""
+          },
+          "number": "1",
+          "index": "11/1",
+          "status": "Working",
+          "customerServiceAvailable": true,
+          "divisionCategory": "CargoBranch",
+          "publicPhones": [
+            "0-800-500-609"
+          ],
+          "internalPhones": [
+            "0631591621"
+          ],
+          "responsiblePerson": "Лавренюк Оксана Миколаївна",
+          "partner": null,
+          "ownerDivision": null,
+          "externalId": "1ec09d88-e1c2-11e3-8c4a-0050568002cf",
+          "source": "NPUA",
+          "countryCode": "UA",
+          "latitude": 50.354786,
+          "longitude": 30.542884,
+          "distance": null,
+          "maxWeightPlaceSender": 1100,
+          "maxLengthPlaceSender": 600,
+          "maxWidthPlaceSender": 220,
+          "maxHeightPlaceSender": 220,
+          "maxWeightPlaceRecipient": 1100,
+          "maxLengthPlaceRecipient": 600,
+          "maxWidthPlaceRecipient": 220,
+          "maxHeightPlaceRecipient": 220,
+          "maxCostPlace": 99999999.99,
+          "maxDeclaredCostPlace": 99999999.99,
+          "prohibitedSending": false,
+          "prohibitedIssuance": false,
+          "workSchedule": [
+            {
+              "day": "sunday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "monday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "tuesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "wednesday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "thursday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "friday",
+              "from": "08:00",
+              "to": "21:00",
+              "breakFrom": "",
+              "breakTo": ""
+            },
+            {
+              "day": "saturday",
+              "from": "09:00",
+              "to": "19:00",
+              "breakFrom": "",
+              "breakTo": ""
+            }
+          ],
+          "settings": [
+            {
+              "id": 44,
+              "divisionId": 7162,
+              "name": "additionalId",
+              "value": "6c48fc87-59d4-11df-9997-000c29f9e806",
+              "from": "2025-04-21T13:47:35.557740Z",
+              "to": "3024-04-21T13:47:35.557746Z",
+              "createdAt": "2022-10-01T16:54:30.000000Z",
+              "updatedAt": "2026-03-03T21:29:35.554865Z",
+              "deletedAt": null
+            }
+          ],
+          "createdAt": "2022-10-01T16:54:30.000000Z",
+          "updatedAt": "2026-03-03T21:29:35.579049Z",
+          "deletedAt": null,
+          "photos": [],
+          "attributes": {
+            "servicingDepartmentForParcel": 928089,
+            "servicingDepartmentForCargo": 934624,
+            "bikeParking": true,
+            "hasGenerator": true,
+            "hasMirror": true,
+            "hasFittingRoom": true,
+            "clientComfortZone": true,
+            "selfServiceWorkplacesCount": 1,
+            "callButton": true,
+            "ramp": true,
+            "parking": true,
+            "novaPayServices": true
+          },
+          "refCity": {
+            "id": 118064,
+            "name": "місто Київ",
+            "country": {
+              "code": "UA",
+              "name": "Україна"
+            },
+            "region": {
+              "id": 406,
+              "name": "Київська область",
+              "parent": null
+            },
+            "latitude": 50.450418,
+            "longitude": 30.523541,
+            "postCode1": "01001",
+            "postCode2": "04215",
+            "alternativeNames": [
+              "kyiv",
+              "місто київ",
+              "misto kiyiv",
+              "город киев",
+              "gorod kiev",
+              "city kyiv"
+            ],
+            "externalId": "e718a680-4b33-11e4-ab6d-005056801329",
+            "boost": 495,
+            "prohibitedSending": false,
+            "prohibitedIssuance": false,
+            "createdAt": "2022-10-01T15:50:20.000000Z",
+            "updatedAt": "2024-12-12T11:03:53.874011Z",
+            "deletedAt": null,
+            "shortName": "Київ"
+          }
+        },
+        "deliveryAddress": "Відділення №1: вул. Пирогівський шлях, 135 місто Київ вул. Пирогівський Шлях (Червонопрапорна), 135"
+      },
+      "total": 1299.99
+    }
+  ]
+}

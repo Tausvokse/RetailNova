@@ -1,302 +1,243 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { Clock, CreditCard, Truck, MapPin, X } from "lucide-react";
+import { Clock, CreditCard } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Card } from "../components/ui/card";
-import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { Header } from "../components/Header";
+import { api, getToken } from "../lib/api";
+import { clearCart, getCartCount, getCartItems } from "../lib/cart";
+
+type CheckoutItem = { id: string; name: string; price: number; quantity: number; images?: string[]; image?: string };
+type PaymentMethod = { id: string; brand: string; cardLast4: string; isDefault?: boolean };
+type ProfileData = { user: { firstName?: string; lastName?: string; phone?: string }; paymentMethods: PaymentMethod[] };
+type BranchSelection = {
+  id: string;
+  shortName?: string;
+  addressParts?: { city?: string; street?: string; building?: string };
+};
 
 export function CheckoutPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [timeLeft, setTimeLeft] = useState(15 * 60); // 15 minutes in seconds
-  const [showExpiredModal, setShowExpiredModal] = useState(false);
-  const [deliveryMethod, setDeliveryMethod] = useState("standard");
+  const stateItems = (location.state?.items || []) as CheckoutItem[];
+  const items: CheckoutItem[] = stateItems.length
+    ? stateItems
+    : getCartItems().map((item) => ({ ...item, images: [item.image] }));
 
-  const items = location.state?.items || [];
+  const [timeLeft, setTimeLeft] = useState(15 * 60);
+  const [error, setError] = useState("");
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState("");
+  const [details, setDetails] = useState({ recipientName: "", recipientPhone: "" });
+
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [selectedBranch, setSelectedBranch] = useState<BranchSelection | null>(null);
+  const [coords, setCoords] = useState<{ latitude: string; longitude: string }>({ latitude: "", longitude: "" });
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setShowExpiredModal(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
+    const timer = setInterval(() => setTimeLeft((prev) => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoords({ latitude: String(position.coords.latitude), longitude: String(position.coords.longitude) });
+        },
+        () => setCoords({ latitude: "", longitude: "" }),
+      );
+    }
+  }, []);
 
-  const calculateTotal = () => {
-    return items.reduce((sum: number, item: any) => sum + item.price * item.quantity, 0);
-  };
+  useEffect(() => {
+    if (!getToken() && items.length > 0) {
+      navigate("/auth", { state: { returnTo: "/checkout", items }, replace: true });
+    }
+  }, [items, navigate]);
 
-  const handlePlaceOrder = () => {
-    const orderId = "RN-" + Math.floor(Math.random() * 10000);
-    navigate(`/order-success/${orderId}`, {
-      state: {
-        orderId,
-        items,
-        total: calculateTotal(),
+  useEffect(() => {
+    if (!getToken()) return;
+    api<ProfileData>("/profile", {}, true)
+      .then((data) => {
+        setProfile(data);
+        setDetails({
+          recipientName: `${data.user.lastName || ""} ${data.user.firstName || ""}`.trim(),
+          recipientPhone: data.user.phone || "",
+        });
+        if (data.paymentMethods.length > 0) {
+          const preferredCard = data.paymentMethods.find((m) => m.isDefault) || data.paymentMethods[0];
+          setSelectedPayment(preferredCard.id);
+        }
+      })
+      .catch(() => setProfile(null));
+  }, []);
+
+  useEffect(() => {
+    if (!isBranchModalOpen) return;
+
+    const handler = (event: MessageEvent) => {
+      if (event.origin !== "https://widget.novapost.com") return;
+      if (event.data === "closeFrame") {
+        setIsBranchModalOpen(false);
+        return;
+      }
+
+      if (event.data && typeof event.data === "object") {
+        setSelectedBranch(event.data as BranchSelection);
+        setIsBranchModalOpen(false);
+      }
+    };
+
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, [isBranchModalOpen]);
+
+  const formatTime = (seconds: number) => `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
+  const total = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
+
+  const selectedBranchText = selectedBranch?.shortName || "";
+  const selectedBranchDescription = selectedBranch
+    ? `${selectedBranch.addressParts?.city || ""} вул. ${selectedBranch.addressParts?.street || ""}, ${selectedBranch.addressParts?.building || ""}`.trim()
+    : "Обрати відділення або поштомат";
+
+  const sendInitDataToIframe = () => {
+    const iframe = iframeRef.current;
+    if (!iframe?.contentWindow) return;
+
+    iframe.contentWindow.postMessage(
+      {
+        placeName: "Київ",
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        domain: window.location.hostname,
+        id: selectedBranch?.id || null,
       },
-    });
+      "*",
+    );
   };
 
-  const handleRefreshAvailability = () => {
-    navigate("/");
+  const handlePlaceOrder = async () => {
+    if (!getToken()) {
+      navigate("/auth", { state: { returnTo: "/checkout", items } });
+      return;
+    }
+
+    if (!details.recipientName.trim() || !details.recipientPhone.trim()) {
+      setError("Вкажіть ПІБ та номер отримувача.");
+      return;
+    }
+
+    if (!selectedBranch) {
+      setError("Оберіть відділення або поштомат Нової Пошти для доставки.");
+      return;
+    }
+
+    try {
+      const reserve = await api<{ reservationId: string }>("/checkout/reserve", { method: "POST", body: JSON.stringify({ items: items.map((i) => ({ id: i.id, quantity: i.quantity })) }) }, true);
+      const order = await api<{ orderId: string }>(
+        "/orders",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            reservationId: reserve.reservationId,
+            customerDetails: {
+              recipientName: details.recipientName.trim(),
+              recipientPhone: details.recipientPhone.trim(),
+              selectedPayment,
+              deliveryMethod: "nova-poshta",
+              novaPoshtaBranch: selectedBranch,
+              deliveryAddress: `${selectedBranch.shortName || ""} ${selectedBranchDescription}`,
+            },
+          }),
+        },
+        true,
+      );
+      clearCart();
+      navigate(`/order-success/${order.orderId}`, { state: { orderId: order.orderId, items, total } });
+    } catch (e) {
+      setError((e as Error).message);
+    }
   };
 
   if (items.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <Header cartCount={0} />
-        <div className="flex items-center justify-center pt-20">
-          <Card className="p-8 text-center max-w-md">
-            <p className="text-gray-600 mb-4">Ваш кошик порожній</p>
-            <Button onClick={() => navigate("/")}>Продовжити покупки</Button>
-          </Card>
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen bg-gray-50"><Header cartCount={0} /><div className="flex items-center justify-center pt-20"><Card className="p-8 text-center max-w-md"><p className="text-gray-600 mb-4">Ваш кошик порожній</p><Button onClick={() => navigate("/")}>Продовжити покупки</Button></Card></div></div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sticky Timer Banner - Key Feature */}
-      <div className="sticky top-0 z-50 bg-gradient-to-r from-[#f97316] to-[#ef4444] text-white py-4 px-4 shadow-lg">
-        <div className="max-w-7xl mx-auto flex items-center justify-center gap-3">
-          <Clock className="w-5 h-5 animate-pulse" />
-          <p className="font-semibold text-lg">
-            Товари тимчасово зарезервовані. Будь ласка, завершіть оформлення замовлення за{" "}
-            <span className="font-mono text-xl">{formatTime(timeLeft)}</span>
-          </p>
-        </div>
-      </div>
-
-      {/* Header */}
-      <Header cartCount={items.length} />
-
+      <div className="sticky top-0 z-50 bg-gradient-to-r from-[#f97316] to-[#ef4444] text-white py-4 px-4 shadow-lg"><div className="max-w-7xl mx-auto flex items-center justify-center gap-3"><Clock className="w-5 h-5 animate-pulse" /><p className="font-semibold text-lg">Товари зарезервовані на <span className="font-mono text-xl">{formatTime(timeLeft)}</span></p></div></div>
+      <Header cartCount={getCartCount()} />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <h1 className="text-3xl font-semibold text-gray-900 mb-8">Оформлення замовлення</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Checkout Form */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Contact Information */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  1
-                </div>
-                Контактна інформація
-              </h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">Ім'я</Label>
-                    <Input id="firstName" placeholder="Іван" />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Прізвище</Label>
-                    <Input id="lastName" placeholder="Петренко" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="email">Електронна пошта</Label>
-                  <Input id="email" type="email" placeholder="ivan.petrenko@example.com" />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Телефон</Label>
-                  <Input id="phone" type="tel" placeholder="+380 (99) 123-45-67" />
-                </div>
+          <div className="lg:col-span-2">
+            <Card className="p-6 space-y-4">
+              <div>
+                <Label>ПІБ отримувача</Label>
+                <Input value={details.recipientName} onChange={(e) => setDetails((d) => ({ ...d, recipientName: e.target.value }))} />
               </div>
-            </Card>
 
-            {/* Shipping Address */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  2
-                </div>
-                Адреса доставки
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="address">Вулиця та номер будинку</Label>
-                  <Input id="address" placeholder="вул. Хрещатик, 1" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="city">Місто</Label>
-                    <Input id="city" placeholder="Київ" />
-                  </div>
-                  <div>
-                    <Label htmlFor="state">Область</Label>
-                    <Input id="state" placeholder="Київська" />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="zip">Поштовий індекс</Label>
-                  <Input id="zip" placeholder="01001" />
-                </div>
+              <div>
+                <Label>Номер отримувача</Label>
+                <Input value={details.recipientPhone} onChange={(e) => setDetails((d) => ({ ...d, recipientPhone: e.target.value }))} />
               </div>
-            </Card>
 
-            {/* Delivery Method */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  3
-                </div>
-                Спосіб доставки
-              </h2>
-              <RadioGroup value={deliveryMethod} onValueChange={setDeliveryMethod}>
-                <div className="space-y-3">
-                  <label className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <RadioGroupItem value="standard" id="standard" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-gray-600" />
-                        <span className="font-medium">Стандартна доставка</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">5-7 робочих днів • Безкоштовно</p>
-                    </div>
-                    <span className="font-semibold">$0.00</span>
-                  </label>
-                  <label className="flex items-center gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                    <RadioGroupItem value="express" id="express" />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Truck className="w-5 h-5 text-gray-600" />
-                        <span className="font-medium">Експрес доставка</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">2-3 робочих дні</p>
-                    </div>
-                    <span className="font-semibold">$15.00</span>
-                  </label>
-                </div>
-              </RadioGroup>
-            </Card>
-
-            {/* Payment */}
-            <Card className="p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#1e40af] text-white flex items-center justify-center text-sm">
-                  4
-                </div>
-                Оплата
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="cardNumber">Номер картки</Label>
-                  <Input id="cardNumber" placeholder="1234 5678 9012 3456" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="expiry">Термін дії</Label>
-                    <Input id="expiry" placeholder="MM/YY" />
+              <div>
+                <Label className="mb-2 block">Вибір відділення Нової Пошти</Label>
+                <button
+                  type="button"
+                  onClick={() => setIsBranchModalOpen(true)}
+                  className="w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-200 bg-white"
+                >
+                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                    <path d="M11.9401 16.4237H16.0596V21.271H19.2101L15.39 25.0911C14.6227 25.8585 13.3791 25.8585 12.6118 25.0911L8.79166 21.271H11.9401V16.4237ZM21.2688 19.2102V8.78972L25.091 12.6098C25.8583 13.3772 25.8583 14.6207 25.091 15.3881L21.2688 19.2102ZM16.0596 6.73099V11.5763H11.9401V6.73099H8.78958L12.6097 2.90882C13.377 2.14148 14.6206 2.14148 15.3879 2.90882L19.2101 6.73099H16.0596ZM2.90868 12.6098L6.72877 8.78972V19.2102L2.90868 15.3901C2.14133 14.6228 2.14133 13.3772 2.90868 12.6098Z" fill="#DA291C"/>
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-base leading-5 font-medium text-gray-900">{selectedBranchText}</p>
+                    <p className="text-sm leading-5 text-gray-600">{selectedBranchDescription}</p>
                   </div>
-                  <div>
-                    <Label htmlFor="cvv">CVV</Label>
-                    <Input id="cvv" placeholder="123" type="password" maxLength={3} />
-                  </div>
-                </div>
+                  <span className="text-gray-500 text-xl">›</span>
+                </button>
               </div>
+
+              {profile && profile.paymentMethods.length > 0 && (
+                <div>
+                  <Label>Оберіть платіжний засіб з профілю</Label>
+                  <select className="w-full mt-1 h-10 rounded-md border border-gray-200 px-3" value={selectedPayment} onChange={(e) => setSelectedPayment(e.target.value)}>
+                    {profile.paymentMethods.map((method) => <option key={method.id} value={method.id}>{method.brand} •••• {method.cardLast4}</option>)}
+                  </select>
+                </div>
+              )}
             </Card>
           </div>
 
-          {/* Order Summary Sidebar - Key Feature */}
-          <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-24">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Підсумок замовлення</h2>
-              
-              <div className="space-y-4 mb-6">
-                {items.map((item: any, idx: number) => (
-                  <div key={idx} className="flex gap-4">
-                    <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                      <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{item.name}</p>
-                      <p className="text-sm text-gray-600">Кіл-ть: {item.quantity}</p>
-                      <p className="font-semibold text-[#1e40af]">${item.price}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t pt-4 space-y-2 mb-6">
-                <div className="flex justify-between text-gray-600">
-                  <span>Проміжний підсумок</span>
-                  <span>${calculateTotal().toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>Доставка</span>
-                  <span>{deliveryMethod === "express" ? "$15.00" : "Безкоштовно"}</span>
-                </div>
-                <div className="flex justify-between text-lg font-semibold text-gray-900 pt-2 border-t">
-                  <span>Всього</span>
-                  <span className="text-[#1e40af]">
-                    ${(calculateTotal() + (deliveryMethod === "express" ? 15 : 0)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                className="w-full py-6 text-lg bg-[#1e40af] hover:bg-[#1e3a8a]"
-                onClick={handlePlaceOrder}
-              >
-                <CreditCard className="w-5 h-5 mr-2" />
-                Оформити замовлення
-              </Button>
-
-              <Card className="mt-4 p-3 bg-blue-50 border-blue-200">
-                <p className="text-xs text-blue-900">
-                  <Clock className="w-4 h-4 inline mr-1" />
-                  Ваші товари зарезервовані з жорстким обмеженням часу. Завершіть оформлення до закінчення таймера.
-                </p>
-              </Card>
-            </Card>
-          </div>
+          <div><Card className="p-6 sticky top-24"><h2 className="text-xl font-semibold mb-4">Підсумок</h2>{items.map((item) => <div key={item.id} className="flex justify-between py-2"><span>{item.name} x{item.quantity}</span><span>${(item.price * item.quantity).toFixed(2)}</span></div>)}<div className="border-t mt-3 pt-3 font-semibold">Всього: <span className="text-[#1e40af]">${total.toFixed(2)}</span></div><Button className="w-full mt-4 py-6 text-lg bg-[#1e40af] hover:bg-[#1e3a8a]" onClick={handlePlaceOrder}><CreditCard className="w-5 h-5 mr-2" />Оформити замовлення</Button>{error && <p className="text-red-600 text-sm mt-3">{error}</p>}</Card></div>
         </div>
       </div>
 
-      {/* Expired Reservation Modal - Alternative State */}
-      <Dialog open={showExpiredModal} onOpenChange={setShowExpiredModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <Clock className="w-6 h-6" />
-              Час резервування закінчився
-            </DialogTitle>
-            <DialogDescription className="pt-4">
-              Час вашого резервування минув. Товари повернуто на загальний склад. Будь ласка, оновіть наявність і спробуйте знову.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 pt-4">
-            <Button
-              className="w-full bg-[#1e40af] hover:bg-[#1e3a8a]"
-              onClick={handleRefreshAvailability}
-            >
-              Оновити наявність
-            </Button>
-            <Button variant="outline" className="w-full" onClick={() => setShowExpiredModal(false)}>
-              Скасувати
-            </Button>
+      {isBranchModalOpen && (
+        <div className="fixed inset-0 z-[1000] bg-black/60 flex items-center justify-center p-4">
+          <div className="relative w-[80%] max-w-6xl h-[80%] bg-white shadow-xl overflow-hidden">
+            <header className="h-20 border-b border-gray-200 px-5 flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Вибрати відділення</h2>
+              <button type="button" onClick={() => setIsBranchModalOpen(false)} className="text-3xl leading-none">×</button>
+            </header>
+            <iframe
+              ref={iframeRef}
+              title="Nova Poshta Widget"
+              src="https://widget.novapost.com/division/index.html"
+              className="w-full h-[calc(100%-81px)] border-0"
+              allow="geolocation"
+              onLoad={sendInitDataToIframe}
+            />
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 }
