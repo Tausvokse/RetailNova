@@ -1,4 +1,6 @@
-const API_BASE = "http://localhost:3000/api";
+// Визначаємо базу API: якщо це режим розробки (на комп'ютері), використовуємо localhost.
+// Якщо це зібраний сайт на Heroku (продакшен), використовуємо відносний шлях "/api".
+const API_BASE = import.meta.env.DEV ? "http://localhost:3000/api" : "/api";
 
 export function getToken() {
   return localStorage.getItem("rn_token") || "";
