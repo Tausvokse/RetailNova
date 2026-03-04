@@ -6,13 +6,22 @@ import { resolve, join } from "node:path";
 import TelegramBot from "node-telegram-bot-api";
 
 const app = express();
-
-// ✅ ВИПРАВЛЕНО: Тепер сервер використовує порт, який надає Heroku
 const PORT = process.env.PORT || 3000;
 const DB_PATH = resolve(process.cwd(), "data", "db.json");
 
 app.use(cors());
 app.use(express.json());
+
+// ==========================================
+// ГЛОБАЛЬНЕ ПЕРЕХОПЛЕННЯ ПОМИЛОК
+// (Щоб Heroku не видавав H10 при найменшій проблемі)
+// ==========================================
+process.on('uncaughtException', (err) => {
+  console.error('🔥 КРИТИЧНА ПОМИЛКА (uncaughtException):', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 НЕОБРОБЛЕНА ПОМИЛКА PROMISE (unhandledRejection):', reason);
+});
 
 const reservations = new Map();
 
@@ -35,17 +44,33 @@ const defaultDB = () => ({
 });
 
 const ensureDB = () => {
-  const dir = resolve(process.cwd(), "data");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify(defaultDB(), null, 2));
+  try {
+    const dir = resolve(process.cwd(), "data");
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    if (!existsSync(DB_PATH)) writeFileSync(DB_PATH, JSON.stringify(defaultDB(), null, 2));
+  } catch (err) {
+    console.error("❌ Помилка при створенні бази даних:", err);
+  }
 };
 
 const readDB = () => {
-  ensureDB();
-  return JSON.parse(readFileSync(DB_PATH, "utf-8"));
+  try {
+    ensureDB();
+    return JSON.parse(readFileSync(DB_PATH, "utf-8"));
+  } catch (err) {
+    console.error("❌ Помилка при читанні бази даних:", err);
+    return defaultDB(); // Повертаємо пусту базу, щоб сервер не впав
+  }
 };
 
-const saveDB = (db) => writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+const saveDB = (db) => {
+  try {
+    writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+  } catch (err) {
+    console.error("❌ Помилка при збереженні бази даних:", err);
+  }
+};
+
 const hashPassword = (password) => crypto.createHash("sha256").update(password).digest("hex");
 const generateToken = () => crypto.randomBytes(24).toString("hex");
 const generateId = (prefix) => `${prefix}-${crypto.randomBytes(4).toString("hex")}`;
@@ -183,51 +208,6 @@ app.put("/api/profile", authMiddleware, (req, res) => {
   res.json({ success: true });
 });
 
-app.post("/api/profile/payment-methods", authMiddleware, (req, res) => {
-  const db = readDB();
-  const method = { id: generateId("pay"), userId: req.user.id, ...req.body, isDefault: Boolean(req.body.isDefault) };
-  if (method.isDefault) db.paymentMethods = db.paymentMethods.map((m) => m.userId === req.user.id ? { ...m, isDefault: false } : m);
-  db.paymentMethods.push(method);
-  saveDB(db);
-  res.json(method);
-});
-
-app.delete("/api/profile/payment-methods/:id", authMiddleware, (req, res) => {
-  const db = readDB();
-  db.paymentMethods = db.paymentMethods.filter((m) => !(m.id === req.params.id && m.userId === req.user.id));
-  saveDB(db);
-  res.json({ success: true });
-});
-
-app.put("/api/profile/notifications", authMiddleware, (req, res) => {
-  const db = readDB();
-  const idx = db.notificationSettings.findIndex((n) => n.userId === req.user.id);
-  if (idx === -1) db.notificationSettings.push({ userId: req.user.id, ...req.body });
-  else db.notificationSettings[idx] = { ...db.notificationSettings[idx], ...req.body };
-  saveDB(db);
-  res.json({ success: true });
-});
-
-app.put("/api/profile/security/password", authMiddleware, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (req.user.passwordHash !== hashPassword(currentPassword)) return res.status(400).json({ error: "Невірний поточний пароль" });
-  const db = readDB();
-  const idx = db.users.findIndex((u) => u.id === req.user.id);
-  db.users[idx].passwordHash = hashPassword(newPassword);
-  saveDB(db);
-  res.json({ success: true });
-});
-
-app.put("/api/profile/security/2fa", authMiddleware, (req, res) => {
-  const db = readDB();
-  const idx = db.securitySettings.findIndex((s) => s.userId === req.user.id);
-  const value = Boolean(req.body.enabled);
-  if (idx === -1) db.securitySettings.push({ userId: req.user.id, twoFactorEnabled: value });
-  else db.securitySettings[idx].twoFactorEnabled = value;
-  saveDB(db);
-  res.json({ success: true });
-});
-
 app.post("/api/checkout/reserve", authMiddleware, (req, res) => {
   releaseExpiredReservations();
   const { items } = req.body;
@@ -298,231 +278,241 @@ app.post("/api/orders", authMiddleware, (req, res) => {
 // ТЕЛЕГРАМ БОТ
 // ==========================================
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "ТВІЙ_ТОКЕН_ТУТ"; 
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M"; 
 
-if (TELEGRAM_TOKEN !== "ТВІЙ_ТОКЕН_ТУТ") {
-  const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
+if (TELEGRAM_TOKEN && TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjPgnb13t_M") {
+  try {
+    const bot = new TelegramBot(TELEGRAM_TOKEN, { polling: true });
 
-  const tgUserStates = new Map();
-  const tgDraftOrders = new Map();
-
-  bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    tgUserStates.delete(chatId);
-    bot.sendMessage(chatId, "👋 Вітаємо в офіційному боті RetailNova!\nОберіть дію з меню нижче:", {
-      reply_markup: {
-        keyboard: [
-          [{ text: "🛍 Каталог" }, { text: "🛒 Кошик" }],
-          [{ text: "👤 Мій профіль (Замовлення)" }]
-        ],
-        resize_keyboard: true
-      }
+    bot.on("polling_error", (error) => {
+      console.error("❌ Помилка Telegram бота (polling):", error.message);
     });
-  });
 
-  bot.on("message", (msg) => {
-    const chatId = msg.chat.id;
-    const text = msg.text;
+    const tgUserStates = new Map();
+    const tgDraftOrders = new Map();
 
-    if (!text || text.startsWith("/")) return;
-
-    const state = tgUserStates.get(chatId);
-
-    if (state === "AWAITING_NAME") {
-      tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), name: text });
-      tgUserStates.set(chatId, "AWAITING_PHONE");
-      return bot.sendMessage(chatId, "📞 Введіть ваш номер телефону:");
-    }
-
-    if (state === "AWAITING_PHONE") {
-      tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), phone: text });
+    bot.onText(/\/start/, (msg) => {
+      const chatId = msg.chat.id;
       tgUserStates.delete(chatId);
-      
-      const details = tgDraftOrders.get(chatId);
-      const order = checkoutTgOrder(chatId, {
-          recipientName: details.name,
-          recipientPhone: details.phone,
-          deliveryMethod: "telegram-bot"
-      });
-
-      if (order) {
-          bot.sendMessage(chatId, `✅ Замовлення <b>${order.id}</b> успішно оформлено!\nСума до сплати: ${order.total.toFixed(2)} грн.\n\nМенеджер зв'яжеться з вами найближчим часом.`, { parse_mode: "HTML" });
-      } else {
-          bot.sendMessage(chatId, "❌ Помилка оформлення. Можливо, час резерву вийшов або кошик порожній.");
-      }
-      return;
-    }
-
-    if (text === "🛍 Каталог") {
-      releaseExpiredReservations();
-      const db = readDB();
-      if (db.products.length === 0) return bot.sendMessage(chatId, "Каталог порожній.");
-      
-      db.products.forEach(p => {
-        bot.sendPhoto(chatId, p.image, {
-          caption: `<b>${p.name}</b>\n\nКатегорія: ${p.category}\nЦіна: ${p.price} грн\nВ наявності: ${p.stock > 0 ? p.stock + " шт." : "Немає в наявності"}\n\n<i>${p.description}</i>`,
-          parse_mode: "HTML",
-          reply_markup: {
-            inline_keyboard: [
-              p.stock > 0 ? [{ text: "➕ Додати в кошик", callback_data: `add_${p.id}` }] : []
-            ]
-          }
-        });
-      });
-    } else if (text === "🛒 Кошик") {
-       releaseExpiredReservations();
-       const tgUserId = `tg-${chatId}`;
-       const res = Array.from(reservations.values()).find(r => r.userId === tgUserId && r.expiresAt > Date.now());
-       
-       if (!res || res.items.length === 0) {
-           return bot.sendMessage(chatId, "🛒 Ваш кошик порожній.");
-       }
-       
-       const db = readDB();
-       let cartText = "🛒 <b>Ваш кошик:</b>\n\n";
-       let total = 0;
-       
-       res.items.forEach(item => {
-           const product = db.products.find(p => p.id === item.id);
-           if (product) {
-               const sum = item.quantity * product.price;
-               total += sum;
-               cartText += `▪️ ${product.name} (x${item.quantity}) — ${sum.toFixed(2)} грн\n`;
-           }
-       });
-       
-       cartText += `\n<b>Разом:</b> ${total.toFixed(2)} грн`;
-       
-       bot.sendMessage(chatId, cartText, {
-           parse_mode: "HTML",
-           reply_markup: {
-               inline_keyboard: [
-                   [{ text: "✅ Оформити замовлення", callback_data: "checkout" }],
-                   [{ text: "❌ Очистити кошик", callback_data: "clear_cart" }]
-               ]
-           }
-       });
-    } else if (text === "👤 Мій профіль (Замовлення)") {
-       const db = readDB();
-       const userOrders = db.orders.filter(o => o.userId === `tg-${chatId}`);
-       if (userOrders.length === 0) {
-           return bot.sendMessage(chatId, "У вас ще немає замовлень.");
-       }
-       let msgText = "📦 <b>Ваші останні замовлення:</b>\n\n";
-       userOrders.slice(-5).reverse().forEach(o => {
-           msgText += `Замовлення <b>${o.id}</b> від ${new Date(o.date).toLocaleDateString()}\n`;
-           msgText += `Сума: ${o.total.toFixed(2)} грн | Статус: ${o.status}\n\n`;
-       });
-       bot.sendMessage(chatId, msgText, { parse_mode: "HTML" });
-    }
-  });
-
-  bot.on("callback_query", (query) => {
-    const chatId = query.message.chat.id;
-    const data = query.data;
-
-    if (data.startsWith("add_")) {
-        releaseExpiredReservations();
-        const productId = data.replace("add_", "");
-        const success = addTgToCart(chatId, productId);
-        if (success) {
-            bot.answerCallbackQuery(query.id, { text: "✅ Товар додано в кошик!", show_alert: false });
-        } else {
-            bot.answerCallbackQuery(query.id, { text: "❌ Недостатньо товару в наявності.", show_alert: true });
+      bot.sendMessage(chatId, "👋 Вітаємо в офіційному боті RetailNova!\nОберіть дію з меню нижче:", {
+        reply_markup: {
+          keyboard: [
+            [{ text: "🛍 Каталог" }, { text: "🛒 Кошик" }],
+            [{ text: "👤 Мій профіль (Замовлення)" }]
+          ],
+          resize_keyboard: true
         }
-    } else if (data === "checkout") {
-        tgUserStates.set(chatId, "AWAITING_NAME");
-        bot.sendMessage(chatId, "Для оформлення замовлення, будь ласка, введіть ваше <b>ПІБ</b>:", { parse_mode: "HTML" });
-        bot.answerCallbackQuery(query.id);
-    } else if (data === "clear_cart") {
+      });
+    });
+
+    bot.on("message", (msg) => {
+        const chatId = msg.chat.id;
+        const text = msg.text;
+    
+        if (!text || text.startsWith("/")) return;
+    
+        const state = tgUserStates.get(chatId);
+    
+        if (state === "AWAITING_NAME") {
+          tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), name: text });
+          tgUserStates.set(chatId, "AWAITING_PHONE");
+          return bot.sendMessage(chatId, "📞 Введіть ваш номер телефону:");
+        }
+    
+        if (state === "AWAITING_PHONE") {
+          tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), phone: text });
+          tgUserStates.delete(chatId);
+          
+          const details = tgDraftOrders.get(chatId);
+          const order = checkoutTgOrder(chatId, {
+              recipientName: details.name,
+              recipientPhone: details.phone,
+              deliveryMethod: "telegram-bot"
+          });
+    
+          if (order) {
+              bot.sendMessage(chatId, `✅ Замовлення <b>${order.id}</b> успішно оформлено!\nСума до сплати: ${order.total.toFixed(2)} грн.\n\nМенеджер зв'яжеться з вами найближчим часом.`, { parse_mode: "HTML" });
+          } else {
+              bot.sendMessage(chatId, "❌ Помилка оформлення. Можливо, час резерву вийшов або кошик порожній.");
+          }
+          return;
+        }
+    
+        if (text === "🛍 Каталог") {
+          releaseExpiredReservations();
+          const db = readDB();
+          if (db.products.length === 0) return bot.sendMessage(chatId, "Каталог порожній.");
+          
+          db.products.forEach(p => {
+            bot.sendPhoto(chatId, p.image, {
+              caption: `<b>${p.name}</b>\n\nКатегорія: ${p.category}\nЦіна: ${p.price} грн\nВ наявності: ${p.stock > 0 ? p.stock + " шт." : "Немає в наявності"}\n\n<i>${p.description}</i>`,
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  p.stock > 0 ? [{ text: "➕ Додати в кошик", callback_data: `add_${p.id}` }] : []
+                ]
+              }
+            });
+          });
+        } else if (text === "🛒 Кошик") {
+           releaseExpiredReservations();
+           const tgUserId = `tg-${chatId}`;
+           const res = Array.from(reservations.values()).find(r => r.userId === tgUserId && r.expiresAt > Date.now());
+           
+           if (!res || res.items.length === 0) {
+               return bot.sendMessage(chatId, "🛒 Ваш кошик порожній.");
+           }
+           
+           const db = readDB();
+           let cartText = "🛒 <b>Ваш кошик:</b>\n\n";
+           let total = 0;
+           
+           res.items.forEach(item => {
+               const product = db.products.find(p => p.id === item.id);
+               if (product) {
+                   const sum = item.quantity * product.price;
+                   total += sum;
+                   cartText += `▪️ ${product.name} (x${item.quantity}) — ${sum.toFixed(2)} грн\n`;
+               }
+           });
+           
+           cartText += `\n<b>Разом:</b> ${total.toFixed(2)} грн`;
+           
+           bot.sendMessage(chatId, cartText, {
+               parse_mode: "HTML",
+               reply_markup: {
+                   inline_keyboard: [
+                       [{ text: "✅ Оформити замовлення", callback_data: "checkout" }],
+                       [{ text: "❌ Очистити кошик", callback_data: "clear_cart" }]
+                   ]
+               }
+           });
+        } else if (text === "👤 Мій профіль (Замовлення)") {
+           const db = readDB();
+           const userOrders = db.orders.filter(o => o.userId === `tg-${chatId}`);
+           if (userOrders.length === 0) {
+               return bot.sendMessage(chatId, "У вас ще немає замовлень.");
+           }
+           let msgText = "📦 <b>Ваші останні замовлення:</b>\n\n";
+           userOrders.slice(-5).reverse().forEach(o => {
+               msgText += `Замовлення <b>${o.id}</b> від ${new Date(o.date).toLocaleDateString()}\n`;
+               msgText += `Сума: ${o.total.toFixed(2)} грн | Статус: ${o.status}\n\n`;
+           });
+           bot.sendMessage(chatId, msgText, { parse_mode: "HTML" });
+        }
+      });
+    
+      bot.on("callback_query", (query) => {
+        const chatId = query.message.chat.id;
+        const data = query.data;
+    
+        if (data.startsWith("add_")) {
+            releaseExpiredReservations();
+            const productId = data.replace("add_", "");
+            const success = addTgToCart(chatId, productId);
+            if (success) {
+                bot.answerCallbackQuery(query.id, { text: "✅ Товар додано в кошик!", show_alert: false });
+            } else {
+                bot.answerCallbackQuery(query.id, { text: "❌ Недостатньо товару в наявності.", show_alert: true });
+            }
+        } else if (data === "checkout") {
+            tgUserStates.set(chatId, "AWAITING_NAME");
+            bot.sendMessage(chatId, "Для оформлення замовлення, будь ласка, введіть ваше <b>ПІБ</b>:", { parse_mode: "HTML" });
+            bot.answerCallbackQuery(query.id);
+        } else if (data === "clear_cart") {
+            const tgUserId = `tg-${chatId}`;
+            for (const [id, res] of reservations.entries()) {
+                if (res.userId === tgUserId) {
+                    const db = readDB();
+                    res.items.forEach(item => {
+                        const p = db.products.find(prod => prod.id === item.id);
+                        if (p) p.stock += item.quantity;
+                    });
+                    saveDB(db);
+                    reservations.delete(id);
+                    break;
+                }
+            }
+            bot.editMessageText("🛒 Кошик очищено.", { chat_id: chatId, message_id: query.message.message_id });
+            bot.answerCallbackQuery(query.id);
+        }
+      });
+    
+      function addTgToCart(chatId, productId) {
+        const db = readDB();
+        const product = db.products.find(p => p.id === productId);
+        if (!product || product.stock < 1) return false;
+    
+        product.stock -= 1;
+        
         const tgUserId = `tg-${chatId}`;
+        let resId, reservation;
+        
         for (const [id, res] of reservations.entries()) {
-            if (res.userId === tgUserId) {
-                const db = readDB();
-                res.items.forEach(item => {
-                    const p = db.products.find(prod => prod.id === item.id);
-                    if (p) p.stock += item.quantity;
-                });
-                saveDB(db);
-                reservations.delete(id);
-                break;
+            if (res.userId === tgUserId && res.expiresAt > Date.now()) {
+                resId = id; reservation = res; break;
             }
         }
-        bot.editMessageText("🛒 Кошик очищено.", { chat_id: chatId, message_id: query.message.message_id });
-        bot.answerCallbackQuery(query.id);
-    }
-  });
-
-  function addTgToCart(chatId, productId) {
-    const db = readDB();
-    const product = db.products.find(p => p.id === productId);
-    if (!product || product.stock < 1) return false;
-
-    product.stock -= 1;
     
-    const tgUserId = `tg-${chatId}`;
-    let resId, reservation;
+        if (!reservation) {
+            resId = generateId("res");
+            reservation = { userId: tgUserId, items: [], expiresAt: Date.now() + 15 * 60 * 1000 };
+            reservations.set(resId, reservation);
+        } else {
+            reservation.expiresAt = Date.now() + 15 * 60 * 1000;
+        }
     
-    for (const [id, res] of reservations.entries()) {
-        if (res.userId === tgUserId && res.expiresAt > Date.now()) {
-            resId = id; reservation = res; break;
-        }
-    }
+        const existingItem = reservation.items.find(i => i.id === productId);
+        if (existingItem) existingItem.quantity += 1;
+        else reservation.items.push({ id: productId, quantity: 1 });
+    
+        saveDB(db);
+        return true;
+      }
+    
+      function checkoutTgOrder(chatId, customerDetails) {
+         const tgUserId = `tg-${chatId}`;
+         let resId, reservation;
+         
+         for (const [id, res] of reservations.entries()) {
+            if (res.userId === tgUserId && res.expiresAt > Date.now()) {
+                resId = id; reservation = res; break;
+            }
+         }
+         if (!reservation) return null;
+    
+         const db = readDB();
+         const items = reservation.items.map((item) => {
+            const product = db.products.find((p) => p.id === item.id);
+            return {
+              productId: product.id,
+              quantity: item.quantity,
+              price: product.price,
+              name: product.name,
+              image: product.image,
+            };
+         });
+    
+         const total = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
+         const order = {
+            id: `RN-${Math.floor(Math.random() * 9000 + 1000)}`,
+            userId: tgUserId,
+            date: new Date().toISOString(),
+            status: "Підтверджено (Telegram)",
+            items,
+            customerDetails,
+            total,
+         };
+    
+         db.orders.push(order);
+         reservations.delete(resId);
+         saveDB(db);
+         return order;
+      }
 
-    if (!reservation) {
-        resId = generateId("res");
-        reservation = { userId: tgUserId, items: [], expiresAt: Date.now() + 15 * 60 * 1000 };
-        reservations.set(resId, reservation);
-    } else {
-        reservation.expiresAt = Date.now() + 15 * 60 * 1000;
-    }
-
-    const existingItem = reservation.items.find(i => i.id === productId);
-    if (existingItem) existingItem.quantity += 1;
-    else reservation.items.push({ id: productId, quantity: 1 });
-
-    saveDB(db);
-    return true;
-  }
-
-  function checkoutTgOrder(chatId, customerDetails) {
-     const tgUserId = `tg-${chatId}`;
-     let resId, reservation;
-     
-     for (const [id, res] of reservations.entries()) {
-        if (res.userId === tgUserId && res.expiresAt > Date.now()) {
-            resId = id; reservation = res; break;
-        }
-     }
-     if (!reservation) return null;
-
-     const db = readDB();
-     const items = reservation.items.map((item) => {
-        const product = db.products.find((p) => p.id === item.id);
-        return {
-          productId: product.id,
-          quantity: item.quantity,
-          price: product.price,
-          name: product.name,
-          image: product.image,
-        };
-     });
-
-     const total = items.reduce((sum, item) => sum + item.quantity * item.price, 0);
-     const order = {
-        id: `RN-${Math.floor(Math.random() * 9000 + 1000)}`,
-        userId: tgUserId,
-        date: new Date().toISOString(),
-        status: "Підтверджено (Telegram)",
-        items,
-        customerDetails,
-        total,
-     };
-
-     db.orders.push(order);
-     reservations.delete(resId);
-     saveDB(db);
-     return order;
+    console.log("✅ Telegram-бот ініціалізовано.");
+  } catch (err) {
+    console.error("❌ Не вдалося запустити Telegram бота:", err.message);
   }
 } else {
   console.log("⚠️ Токен Telegram-бота не знайдено. Бот не запущено.");
@@ -531,14 +521,20 @@ if (TELEGRAM_TOKEN !== "ТВІЙ_ТОКЕН_ТУТ") {
 // ==========================================
 // РОЗДАЧА ФРОНТЕНДУ (САЙТУ)
 // ==========================================
+try {
+  const distPath = resolve(process.cwd(), "dist");
+  app.use(express.static(distPath));
 
-// Вказуємо папку dist, де лежить зібраний Vite застосунок
-const distPath = resolve(process.cwd(), "dist");
-app.use(express.static(distPath));
-
-// Для всіх інших роутів (щоб працював React Router) повертаємо index.html
-app.get("*", (req, res) => {
-  res.sendFile(join(distPath, "index.html"));
-});
+  app.get("*", (req, res) => {
+    const indexPath = join(distPath, "index.html");
+    if (existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.status(404).send("Файли сайту ще не зібрані (немає папки dist).");
+    }
+  });
+} catch (err) {
+  console.error("❌ Помилка налаштування фронтенду:", err);
+}
 
 app.listen(PORT, () => console.log(`✅ Backend сервер запущено на порту ${PORT}`));
