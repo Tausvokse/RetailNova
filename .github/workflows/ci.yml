@@ -1,0 +1,46 @@
+name: RetailNova CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  test:
+    name: Build and Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Клонування репозиторію
+        uses: actions/checkout@v4
+
+      - name: Встановлення Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Встановлення залежностей
+        run: npm ci
+
+      - name: Запуск тестів
+        run: npx vitest run
+
+  deploy:
+    name: Deploy to Heroku
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    steps:
+      - name: Клонування репозиторію
+        uses: actions/checkout@v4
+
+      - name: Деплой на Heroku
+        uses: akhileshns/heroku-deploy@v3.13.15
+        with:
+          # Ці дані ми налаштуємо в секретах GitHub на кроці 2
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: "retailnova" # ЗАМІНИ НА РЕАЛЬНУ НАЗВУ
+          heroku_email: "parhom137@gmail.com" # ЗАМІНИ НА РЕАЛЬНИЙ EMAIL

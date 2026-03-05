@@ -6,13 +6,14 @@ import {
   getCartCount, 
   setCartOwner, 
   resetCartOwnerToGuest,
+  getStorage,
   CartItem 
 } from './cart';
 
 describe('Cart Utility Functions', () => {
   beforeEach(() => {
-    // Очищуємо localStorage перед кожним тестом
-    localStorage.clear();
+    // Використовуємо наш універсальний адаптер сховища для очищення даних перед кожним тестом
+    getStorage().clear();
   });
 
   it('повинен повертати порожній масив, якщо кошик порожній', () => {
@@ -80,7 +81,7 @@ describe('Cart Utility Functions', () => {
     setCartOwner('user-123');
     // Оскільки змінився власник з guest на user-123, кошик має очиститись
     expect(getCartItems()).toEqual([]);
-    expect(localStorage.getItem('retailnova_cart_owner')).toBe('user-123');
+    expect(getStorage().getItem('retailnova_cart_owner')).toBe('user-123');
   });
 
   it('не повинен очищати кошик, якщо власник не змінився', () => {
@@ -96,7 +97,7 @@ describe('Cart Utility Functions', () => {
     addToCart({ id: '1', name: 'A', price: 10, quantity: 1, stock: 10, image: '' });
     
     resetCartOwnerToGuest();
-    expect(localStorage.getItem('retailnova_cart_owner')).toBe('guest');
+    expect(getStorage().getItem('retailnova_cart_owner')).toBe('guest');
     expect(getCartItems()).toEqual([]);
   });
 });
