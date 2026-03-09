@@ -37,5 +37,5 @@
 
 ### 1. Клонування репозиторію
 ```bash
-git clone [https://github.com/your-username/retailnova.git](https://github.com/your-username/retailnova.git)
+git clone [https://github.com/Tausvokse/retailnova.git](https://github.com/Tausvokse/retailnova.git)
 cd retailnova
