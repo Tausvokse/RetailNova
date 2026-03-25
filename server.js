@@ -32,6 +32,12 @@ const generateId = (prefix) => `${prefix}-${crypto.randomBytes(4).toString("hex"
 
 // Зберігання сесій в пам'яті (токен -> userId)
 const sessions = new Map();
+const bootstrapAdminEmails = new Set(
+  String(process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+);
 
 const TICKET_TYPE_LABELS = {
   INCIDENT: "Incident",
@@ -596,6 +602,20 @@ async function authMiddleware(req, res, next) {
   return next();
 }
 
+function adminMiddleware(req, res, next) {
+  if (!req.user?.isAdmin) {
+    return res.status(403).json({ error: "Доступ тільки для адміністраторів" });
+  }
+  return next();
+}
+
+function formatMissingTableError(err, fallback = "Потрібно виконати `npx prisma db push` для актуалізації схеми БД.") {
+  if (err?.code === "P2021") {
+    return `${fallback} Поточна таблиця відсутня в базі даних.`;
+  }
+  return err?.message || "Невідома помилка сервера";
+}
+
 app.get("/api/products", async (req, res) => {
   await inventoryService.releaseExpiredReservations();
   const category = req.query.category;
@@ -634,6 +654,7 @@ app.post("/api/auth/register", async (req, res) => {
         firstName: firstName || "Користувач",
         lastName: lastName || "",
         email,
+        isAdmin: bootstrapAdminEmails.has(String(email).toLowerCase()),
         phone,
         birthday,
         passwordHash: hashPassword(password)
@@ -653,6 +674,14 @@ app.post("/api/auth/login", async (req, res) => {
   
   if (!user || user.passwordHash !== hashPassword(password)) {
       return res.status(401).json({ error: "Невірний email або пароль" });
+  }
+
+  if (!user.isAdmin && bootstrapAdminEmails.has(String(user.email).toLowerCase())) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isAdmin: true },
+    });
+    user.isAdmin = true;
   }
 
   const token = generateToken();
@@ -677,7 +706,7 @@ app.get("/api/profile", authMiddleware, async (req, res) => {
   });
 
   res.json({
-    user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, birthday: user.birthday },
+    user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, phone: user.phone, birthday: user.birthday, isAdmin: user.isAdmin },
     orders,
     addresses: [],
     paymentMethods: [],
@@ -740,17 +769,21 @@ app.post("/api/support/tickets", async (req, res) => {
 
     return res.status(201).json(ticket);
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: formatMissingTableError(err) });
   }
 });
 
 app.get("/api/support/tickets/:ticketCode/status", async (req, res) => {
-  const ticket = await prisma.supportTicket.findUnique({ where: { ticketCode: req.params.ticketCode } });
-  if (!ticket) {
-    return res.status(404).json({ error: "Звернення не знайдено" });
-  }
+  try {
+    const ticket = await prisma.supportTicket.findUnique({ where: { ticketCode: req.params.ticketCode } });
+    if (!ticket) {
+      return res.status(404).json({ error: "Звернення не знайдено" });
+    }
 
-  return res.json(formatSupportTicket(ticket));
+    return res.json(formatSupportTicket(ticket));
+  } catch (err) {
+    return res.status(400).json({ error: formatMissingTableError(err) });
+  }
 });
 
 app.get("/api/support/mytickets", async (req, res) => {
@@ -759,23 +792,28 @@ app.get("/api/support/mytickets", async (req, res) => {
     return res.status(400).json({ error: "Потрібно передати userId" });
   }
 
+  let tickets = [];
+  try {
+    tickets = await prisma.supportTicket.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (err) {
+    return res.status(400).json({ error: formatMissingTableError(err) });
+  }
+
+  return res.json(tickets.map(formatSupportTicket));
+});
+
+app.get("/api/admin/tickets", authMiddleware, adminMiddleware, async (req, res) => {
   const tickets = await prisma.supportTicket.findMany({
-    where: { userId },
     orderBy: { createdAt: "desc" },
   });
 
   return res.json(tickets.map(formatSupportTicket));
 });
 
-app.get("/api/admin/tickets", async (req, res) => {
-  const tickets = await prisma.supportTicket.findMany({
-    orderBy: { createdAt: "desc" },
-  });
-
-  return res.json(tickets.map(formatSupportTicket));
-});
-
-app.patch("/api/admin/tickets/:ticketCode", async (req, res) => {
+app.patch("/api/admin/tickets/:ticketCode", authMiddleware, adminMiddleware, async (req, res) => {
   try {
     const { status, assignee, comment } = req.body;
     const updates = {};
@@ -803,8 +841,44 @@ app.patch("/api/admin/tickets/:ticketCode", async (req, res) => {
 
     return res.json(formatSupportTicket(updated));
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    return res.status(400).json({ error: formatMissingTableError(err) });
   }
+});
+
+app.get("/api/admin/users", authMiddleware, adminMiddleware, async (req, res) => {
+  const query = String(req.query.q || "").trim();
+  const where = query
+    ? {
+        OR: [
+          { email: { contains: query, mode: "insensitive" } },
+          { firstName: { contains: query, mode: "insensitive" } },
+          { lastName: { contains: query, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const users = await prisma.user.findMany({
+    where,
+    select: { id: true, firstName: true, lastName: true, email: true, isAdmin: true },
+    orderBy: [{ isAdmin: "desc" }, { email: "asc" }],
+    take: 50,
+  });
+  res.json(users);
+});
+
+app.patch("/api/admin/users/:userId/access", authMiddleware, adminMiddleware, async (req, res) => {
+  const { isAdmin } = req.body;
+  if (typeof isAdmin !== "boolean") {
+    return res.status(400).json({ error: "Поле isAdmin має бути boolean" });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.params.userId },
+    data: { isAdmin },
+    select: { id: true, firstName: true, lastName: true, email: true, isAdmin: true },
+  });
+
+  res.json(updated);
 });
 
 // ==========================================
@@ -818,6 +892,15 @@ const seedProducts = [
 ];
 
 async function initializeDatabase() {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN NOT NULL DEFAULT false;
+      EXCEPTION WHEN undefined_table THEN
+        -- table may not exist before first prisma db push
+        NULL;
+      END $$;
+    `);
+
     const count = await prisma.product.count();
     if (count === 0) {
         console.log("📦 Ініціалізація бази даних товарами...");

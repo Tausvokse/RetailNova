@@ -2,7 +2,7 @@ import { ShoppingCart, User, Menu, LogOut } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { useEffect, useState } from "react";
-import { api, clearToken, getToken } from "../lib/api";
+import { api, clearToken, getToken, getIsAdmin, clearIsAdmin } from "../lib/api";
 import { getCartCount, resetCartOwnerToGuest } from "../lib/cart";
 
 interface HeaderProps {
@@ -13,10 +13,12 @@ export function Header({ cartCount }: HeaderProps) {
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAuthed, setIsAuthed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [cartItemsCount, setCartItemsCount] = useState<number>(cartCount ?? 0);
 
   useEffect(() => {
     setIsAuthed(Boolean(getToken()));
+    setIsAdmin(getIsAdmin());
   }, []);
 
   useEffect(() => {
@@ -41,8 +43,10 @@ export function Header({ cartCount }: HeaderProps) {
       // ignore network logout errors
     }
     clearToken();
+    clearIsAdmin();
     resetCartOwnerToGuest();
     setIsAuthed(false);
+    setIsAdmin(false);
     navigate("/catalog");
   };
 
@@ -60,7 +64,7 @@ export function Header({ cartCount }: HeaderProps) {
             <Link to="/about" className="text-gray-600 hover:text-gray-900 transition-colors">Про нас</Link>
             <Link to="/contacts" className="text-gray-600 hover:text-gray-900 transition-colors">Контакти</Link>
             <Link to="/support" className="text-gray-600 hover:text-gray-900 transition-colors">Підтримка</Link>
-            <Link to="/admin/tickets" className="text-gray-600 hover:text-gray-900 transition-colors">Admin</Link>
+            {isAdmin && <Link to="/admin/tickets" className="text-gray-600 hover:text-gray-900 transition-colors">Admin</Link>}
           </nav>
 
           <div className="flex items-center gap-3">
@@ -90,7 +94,7 @@ export function Header({ cartCount }: HeaderProps) {
             <Link to="/about" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Про нас</Link>
             <Link to="/contacts" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Контакти</Link>
             <Link to="/support" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Підтримка</Link>
-            <Link to="/admin/tickets" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Admin</Link>
+            {isAdmin && <Link to="/admin/tickets" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Admin</Link>}
             <Link to="/profile" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Профіль</Link>
           </nav>
         )}

@@ -4,10 +4,10 @@ import { Header } from "../components/Header";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
-import { api, setToken, getToken } from "../lib/api";
+import { api, setToken, getToken, setIsAdmin } from "../lib/api";
 import { setCartOwner } from "../lib/cart";
 
-type AuthResponse = { token: string; user: { id: string } };
+type AuthResponse = { token: string; user: { id: string; isAdmin?: boolean } };
 
 export function AuthPage() {
   const navigate = useNavigate();
@@ -29,6 +29,7 @@ export function AuthPage() {
       const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
       const res = await api<AuthResponse>(endpoint, { method: "POST", body: JSON.stringify(form) });
       setToken(res.token);
+      setIsAdmin(Boolean(res.user.isAdmin));
       setCartOwner(res.user.id);
       navigate(state.returnTo || "/profile", { state: state.items ? { items: state.items } : undefined });
     } catch (e) {

@@ -14,6 +14,18 @@ export function clearToken() {
   localStorage.removeItem("rn_token");
 }
 
+export function getIsAdmin() {
+  return localStorage.getItem("rn_is_admin") === "true";
+}
+
+export function setIsAdmin(isAdmin: boolean) {
+  localStorage.setItem("rn_is_admin", String(Boolean(isAdmin)));
+}
+
+export function clearIsAdmin() {
+  localStorage.removeItem("rn_is_admin");
+}
+
 export async function api<T>(path: string, options: RequestInit = {}, auth = false): Promise<T> {
   const headers: HeadersInit = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (auth && getToken()) headers.Authorization = `Bearer ${getToken()}`;
