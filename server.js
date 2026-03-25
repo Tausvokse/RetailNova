@@ -33,6 +33,75 @@ const generateId = (prefix) => `${prefix}-${crypto.randomBytes(4).toString("hex"
 // Зберігання сесій в пам'яті (токен -> userId)
 const sessions = new Map();
 
+const TICKET_TYPE_LABELS = {
+  INCIDENT: "Incident",
+  CHANGE_REQUEST: "Change Request",
+  SERVICE_REQUEST: "Service Request",
+};
+
+const TICKET_PRIORITY_LABELS = {
+  HIGH: "High",
+  MEDIUM: "Medium",
+  LOW: "Low",
+};
+
+const TICKET_STATUS_LABELS = {
+  NEW: "New",
+  IN_PROGRESS: "In Progress",
+  REVIEW: "Review",
+  DONE: "Done",
+};
+
+function formatSupportTicket(ticket) {
+  return {
+    ...ticket,
+    typeLabel: TICKET_TYPE_LABELS[ticket.type] ?? ticket.type,
+    priorityLabel: TICKET_PRIORITY_LABELS[ticket.priority] ?? ticket.priority,
+    statusLabel: TICKET_STATUS_LABELS[ticket.status] ?? ticket.status,
+  };
+}
+
+function parseTicketType(value = "") {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "incident") return "INCIDENT";
+  if (normalized === "change request" || normalized === "change_request") return "CHANGE_REQUEST";
+  if (normalized === "service request" || normalized === "service_request") return "SERVICE_REQUEST";
+  throw new Error("Невірний тип звернення. Доступно: Incident / Change Request / Service Request");
+}
+
+function parseTicketPriority(value = "") {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "high") return "HIGH";
+  if (normalized === "medium") return "MEDIUM";
+  if (normalized === "low") return "LOW";
+  throw new Error("Невірний пріоритет. Доступно: High / Medium / Low");
+}
+
+async function createSupportTicket(data) {
+  const createdTicket = await prisma.supportTicket.create({
+    data: {
+      ticketCode: "PENDING",
+      userId: data.userId || null,
+      userName: data.userName,
+      email: data.email || null,
+      channel: data.channel,
+      type: data.type,
+      subject: data.subject,
+      description: data.description,
+      priority: data.priority,
+      status: "NEW",
+    },
+  });
+
+  const ticketCode = `RN-SUP-${String(createdTicket.id).padStart(3, "0")}`;
+  const finalizedTicket = await prisma.supportTicket.update({
+    where: { id: createdTicket.id },
+    data: { ticketCode },
+  });
+
+  return formatSupportTicket(finalizedTicket);
+}
+
 // ==========================================
 // 2. СЕРВІС РЕЗЕРВУВАННЯ (INVENTORY RESERVATION SERVICE)
 // ==========================================
@@ -231,6 +300,13 @@ if (TELEGRAM_TOKEN && TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjP
 
     const tgUserStates = new Map();
     const tgDraftOrders = new Map();
+    const tgSupportDrafts = new Map();
+
+    const startSupportFlow = (chatId) => {
+      tgSupportDrafts.set(chatId, {});
+      tgUserStates.set(chatId, "SUPPORT_TYPE");
+      bot.sendMessage(chatId, "🆕 Створення звернення. Вкажіть тип: Incident / Change Request / Service Request");
+    };
 
     bot.onText(/\/start/, (msg) => {
       const chatId = msg.chat.id;
@@ -246,6 +322,54 @@ if (TELEGRAM_TOKEN && TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjP
       });
     });
 
+
+    bot.onText(/\/help/, (msg) => {
+      bot.sendMessage(
+        msg.chat.id,
+        "Доступні команди:\n/start — запуск меню\n/help — довідка\n/ticket — створити звернення\n/status <ticket_id> — статус звернення\n/mytickets — ваші звернення",
+      );
+    });
+
+    bot.onText(/\/ticket/, (msg) => {
+      startSupportFlow(msg.chat.id);
+    });
+
+    bot.onText(/\/status\s+(.+)/, async (msg, match) => {
+      const ticketCode = (match?.[1] || "").trim();
+      if (!ticketCode) {
+        return bot.sendMessage(msg.chat.id, "Вкажіть номер звернення. Наприклад: /status RN-SUP-001");
+      }
+
+      const ticket = await prisma.supportTicket.findUnique({ where: { ticketCode } });
+      if (!ticket) {
+        return bot.sendMessage(msg.chat.id, `Звернення ${ticketCode} не знайдено.`);
+      }
+
+      const formatted = formatSupportTicket(ticket);
+      bot.sendMessage(msg.chat.id, `Номер: ${formatted.ticketCode}\nТип: ${formatted.typeLabel}\nСтатус: ${formatted.statusLabel}`);
+    });
+
+    bot.onText(/\/mytickets/, async (msg) => {
+      const chatId = msg.chat.id;
+      const userId = `tg-${chatId}`;
+      const tickets = await prisma.supportTicket.findMany({
+        where: { userId, channel: "TELEGRAM" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+
+      if (!tickets.length) {
+        return bot.sendMessage(chatId, "У вас ще немає звернень. Створіть через /ticket");
+      }
+
+      const lines = tickets.map((ticket) => {
+        const formatted = formatSupportTicket(ticket);
+        return `• ${formatted.ticketCode} | ${formatted.typeLabel} | ${formatted.statusLabel}`;
+      });
+
+      bot.sendMessage(chatId, `Ваші звернення:\n${lines.join("\n")}`);
+    });
+
     bot.on("message", async (msg) => {
         const chatId = msg.chat.id;
         const text = msg.text;
@@ -253,6 +377,55 @@ if (TELEGRAM_TOKEN && TELEGRAM_TOKEN !== "8691446783:AAGdzj1UZtzwL2DbhZ8pcdXSdjP
 
         const state = tgUserStates.get(chatId);
         const tgUserId = `tg-${chatId}`;
+
+        if (state === "SUPPORT_TYPE") {
+          try {
+            const type = parseTicketType(text);
+            tgSupportDrafts.set(chatId, { ...tgSupportDrafts.get(chatId), type });
+            tgUserStates.set(chatId, "SUPPORT_SUBJECT");
+            return bot.sendMessage(chatId, "Вкажіть коротку тему звернення:");
+          } catch (error) {
+            return bot.sendMessage(chatId, error.message);
+          }
+        }
+
+        if (state === "SUPPORT_SUBJECT") {
+          tgSupportDrafts.set(chatId, { ...tgSupportDrafts.get(chatId), subject: text });
+          tgUserStates.set(chatId, "SUPPORT_DESCRIPTION");
+          return bot.sendMessage(chatId, "Опишіть проблему або запит:");
+        }
+
+        if (state === "SUPPORT_DESCRIPTION") {
+          tgSupportDrafts.set(chatId, { ...tgSupportDrafts.get(chatId), description: text });
+          tgUserStates.set(chatId, "SUPPORT_PRIORITY");
+          return bot.sendMessage(chatId, "Вкажіть пріоритет: High / Medium / Low");
+        }
+
+        if (state === "SUPPORT_PRIORITY") {
+          try {
+            const priority = parseTicketPriority(text);
+            const draft = tgSupportDrafts.get(chatId) || {};
+            const ticket = await createSupportTicket({
+              userId: tgUserId,
+              userName: msg.from?.username || `${msg.from?.first_name || "Telegram"} ${msg.from?.last_name || "User"}`.trim(),
+              channel: "TELEGRAM",
+              type: draft.type,
+              subject: draft.subject,
+              description: draft.description,
+              priority,
+            });
+
+            tgSupportDrafts.delete(chatId);
+            tgUserStates.delete(chatId);
+
+            return bot.sendMessage(
+              chatId,
+              `Ваше звернення прийнято.\nНомер: ${ticket.ticketCode}\nТип: ${ticket.typeLabel}\nСтатус: ${ticket.statusLabel}`,
+            );
+          } catch (error) {
+            return bot.sendMessage(chatId, error.message);
+          }
+        }
 
         if (state === "AWAITING_NAME") {
           tgDraftOrders.set(chatId, { ...tgDraftOrders.get(chatId), recipientName: text });
@@ -543,6 +716,94 @@ app.post("/api/orders", authMiddleware, async (req, res) => {
     res.json({ success: true, orderId: newOrder.id, total: newOrder.total });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+
+app.post("/api/support/tickets", async (req, res) => {
+  try {
+    const { userName, email, userId, channel = "WEB", type, subject, description, priority } = req.body;
+    if (!userName || !type || !subject || !description || !priority) {
+      return res.status(400).json({ error: "Заповніть обов'язкові поля звернення" });
+    }
+
+    const ticket = await createSupportTicket({
+      userId: userId || null,
+      userName,
+      email,
+      channel,
+      type: parseTicketType(type),
+      subject,
+      description,
+      priority: parseTicketPriority(priority),
+    });
+
+    return res.status(201).json(ticket);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+app.get("/api/support/tickets/:ticketCode/status", async (req, res) => {
+  const ticket = await prisma.supportTicket.findUnique({ where: { ticketCode: req.params.ticketCode } });
+  if (!ticket) {
+    return res.status(404).json({ error: "Звернення не знайдено" });
+  }
+
+  return res.json(formatSupportTicket(ticket));
+});
+
+app.get("/api/support/mytickets", async (req, res) => {
+  const userId = String(req.query.userId || "").trim();
+  if (!userId) {
+    return res.status(400).json({ error: "Потрібно передати userId" });
+  }
+
+  const tickets = await prisma.supportTicket.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return res.json(tickets.map(formatSupportTicket));
+});
+
+app.get("/api/admin/tickets", async (req, res) => {
+  const tickets = await prisma.supportTicket.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  return res.json(tickets.map(formatSupportTicket));
+});
+
+app.patch("/api/admin/tickets/:ticketCode", async (req, res) => {
+  try {
+    const { status, assignee, comment } = req.body;
+    const updates = {};
+
+    if (status) {
+      const normalized = String(status).trim().toUpperCase().replace(/\s+/g, "_");
+      if (!Object.keys(TICKET_STATUS_LABELS).includes(normalized)) {
+        return res.status(400).json({ error: "Невірний статус" });
+      }
+      updates.status = normalized;
+    }
+
+    if (typeof assignee === "string") {
+      updates.assignee = assignee.trim() || null;
+    }
+
+    if (typeof comment === "string") {
+      updates.comment = comment.trim() || null;
+    }
+
+    const updated = await prisma.supportTicket.update({
+      where: { ticketCode: req.params.ticketCode },
+      data: updates,
+    });
+
+    return res.json(formatSupportTicket(updated));
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
   }
 });
 
