@@ -18,27 +18,49 @@ type Ticket = {
   comment?: string | null;
 };
 
+type AdminUser = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  isAdmin: boolean;
+};
+
 export function AdminTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   const loadTickets = async () => {
     setLoading(true);
     try {
-      const data = await api<Ticket[]>("/admin/tickets");
+      const data = await api<Ticket[]>("/admin/tickets", {}, true);
       setTickets(data);
     } finally {
       setLoading(false);
     }
   };
 
+  const loadUsers = async (q = "") => {
+    const encoded = encodeURIComponent(q);
+    const data = await api<AdminUser[]>(`/admin/users${encoded ? `?q=${encoded}` : ""}`, {}, true);
+    setUsers(data);
+  };
+
   useEffect(() => {
     loadTickets();
+    loadUsers();
   }, []);
 
   const updateTicket = async (ticketCode: string, payload: Partial<Ticket>) => {
-    await api(`/admin/tickets/${ticketCode}`, { method: "PATCH", body: JSON.stringify(payload) });
+    await api(`/admin/tickets/${ticketCode}`, { method: "PATCH", body: JSON.stringify(payload) }, true);
     await loadTickets();
+  };
+
+  const setUserAdminAccess = async (userId: string, isAdmin: boolean) => {
+    await api(`/admin/users/${userId}/access`, { method: "PATCH", body: JSON.stringify({ isAdmin }) }, true);
+    await loadUsers(query);
   };
 
   return (
@@ -46,6 +68,25 @@ export function AdminTicketsPage() {
       <Header cartCount={0} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <Card className="p-6">
+          <h2 className="text-2xl font-semibold mb-4">Доступ до адмін панелі</h2>
+          <div className="flex gap-2 mb-4">
+            <Input placeholder="Пошук користувача (email / ім'я)" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Button variant="outline" onClick={() => loadUsers(query)}>Знайти</Button>
+          </div>
+          <div className="space-y-2 mb-8">
+            {users.map((user) => (
+              <div key={user.id} className="flex items-center justify-between border rounded p-3">
+                <div>
+                  <p className="font-medium">{user.firstName} {user.lastName}</p>
+                  <p className="text-xs text-gray-600">{user.email}</p>
+                </div>
+                <Button variant={user.isAdmin ? "outline" : "default"} onClick={() => setUserAdminAccess(user.id, !user.isAdmin)}>
+                  {user.isAdmin ? "Забрати адмін доступ" : "Надати адмін доступ"}
+                </Button>
+              </div>
+            ))}
+          </div>
+
           <h1 className="text-3xl font-semibold mb-6">Admin: звернення підтримки</h1>
           {loading ? (
             <p>Завантаження...</p>
