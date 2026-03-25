@@ -59,6 +59,8 @@ export function Header({ cartCount }: HeaderProps) {
             <Link to="/catalog" className="text-gray-600 hover:text-gray-900 transition-colors">Каталог</Link>
             <Link to="/about" className="text-gray-600 hover:text-gray-900 transition-colors">Про нас</Link>
             <Link to="/contacts" className="text-gray-600 hover:text-gray-900 transition-colors">Контакти</Link>
+            <Link to="/support" className="text-gray-600 hover:text-gray-900 transition-colors">Підтримка</Link>
+            <Link to="/admin/tickets" className="text-gray-600 hover:text-gray-900 transition-colors">Admin</Link>
           </nav>
 
           <div className="flex items-center gap-3">
@@ -87,6 +89,8 @@ export function Header({ cartCount }: HeaderProps) {
             <Link to="/catalog" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Каталог</Link>
             <Link to="/about" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Про нас</Link>
             <Link to="/contacts" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Контакти</Link>
+            <Link to="/support" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Підтримка</Link>
+            <Link to="/admin/tickets" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Admin</Link>
             <Link to="/profile" className="block py-2 text-gray-600" onClick={() => setIsMenuOpen(false)}>Профіль</Link>
           </nav>
         )}

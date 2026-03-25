@@ -8,14 +8,15 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String          @id @default(cuid())
   firstName    String
   lastName     String
-  email        String   @unique
+  email        String          @unique
   passwordHash String
   phone        String?
   birthday     String?
   orders       Order[]
+  tickets      SupportTicket[]
 }
 
 model Product {
@@ -48,4 +49,51 @@ model OrderItem {
   price     Float
   order     Order   @relation(fields: [orderId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
+}
+
+model SupportTicket {
+  id          Int               @id @default(autoincrement())
+  ticketCode  String            @unique
+  userId      String?
+  userName    String
+  email       String?
+  channel     SupportChannel
+  type        SupportTicketType
+  subject     String
+  description String
+  priority    SupportPriority
+  status      SupportStatus     @default(NEW)
+  assignee    String?
+  comment     String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum SupportChannel {
+  TELEGRAM
+  WEB
+}
+
+enum SupportTicketType {
+  INCIDENT
+  CHANGE_REQUEST
+  SERVICE_REQUEST
+}
+
+enum SupportPriority {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum SupportStatus {
+  NEW
+  IN_PROGRESS
+  REVIEW
+  DONE
 }

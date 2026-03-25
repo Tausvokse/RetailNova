@@ -9,6 +9,8 @@ import { AboutPage } from "./pages/AboutPage";
 import { ContactsPage } from "./pages/ContactsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { AuthPage } from "./pages/AuthPage";
+import { SupportPage } from "./pages/SupportPage";
+import { AdminTicketsPage } from "./pages/AdminTicketsPage";
 
 export const router = createBrowserRouter([
   {
@@ -50,6 +52,14 @@ export const router = createBrowserRouter([
   {
     path: "/auth",
     Component: AuthPage,
+  },
+  {
+    path: "/support",
+    Component: SupportPage,
+  },
+  {
+    path: "/admin/tickets",
+    Component: AdminTicketsPage,
   },
   {
     path: "*",
